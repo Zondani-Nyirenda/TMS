@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- This ensures warnings like this don't stop your build if you prefer, 
+         though fixing the version is better -->
+		<WarningsAsErrors></WarningsAsErrors>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Update this to 8.0.2 to satisfy the dependency chain -->
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+
+		<!-- Cleaned up AutoMapper -->
+		<PackageReference Include="AutoMapper" Version="13.0.1" />
+	
+
+		<!-- Unified FluentValidation to the latest stable 11.x versions -->
+		<PackageReference Include="FluentValidation" Version="11.9.0" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TMS.Domain\TMS.Domain.csproj" />
+	</ItemGroup>
+
+</Project>

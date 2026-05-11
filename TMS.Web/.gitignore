@@ -1,0 +1,19 @@
+# Build artifacts
+bin/
+obj/
+out/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.cache
+
+# Other
+*.swp

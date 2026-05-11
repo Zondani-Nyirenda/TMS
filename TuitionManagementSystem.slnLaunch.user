@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "TMS.API\\TMS.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "TMS.Web\\TMS.Web.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

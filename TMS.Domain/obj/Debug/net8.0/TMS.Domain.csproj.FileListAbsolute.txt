@@ -1,0 +1,12 @@
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\bin\Debug\net8.0\TMS.Domain.deps.json
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\bin\Debug\net8.0\TMS.Domain.dll
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\bin\Debug\net8.0\TMS.Domain.pdb
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.csproj.AssemblyReference.cache
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.AssemblyInfoInputs.cache
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.AssemblyInfo.cs
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.csproj.CoreCompileInputs.cache
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.dll
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\refint\TMS.Domain.dll
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\TMS.Domain.pdb
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.Domain\obj\Debug\net8.0\ref\TMS.Domain.dll
