@@ -1,0 +1,36 @@
+﻿@using MudBlazor
+
+<MudPaper Class="pa-5" Elevation="0" Style="border-radius:12px;height:100%;">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div>
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700;font-size:14px;letter-spacing:-0.2px;">
+                Fee Collection
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:11px;">
+                By student level · Term 2
+            </MudText>
+        </div>
+        <MudText Typo="Typo.caption" Style="color:#6366F1;font-size:11px;font-weight:600;cursor:pointer;">
+            Full report →
+        </MudText>
+    </div>
+
+    <FeeRow Level="Primary (Gr 1–7)"   Collected="$18,400" Target="$21,000" Pct="88" BarColor="#6366F1" />
+    <FeeRow Level="Junior (Gr 8–9)"    Collected="$12,200" Target="$15,000" Pct="81" BarColor="#8B5CF6" />
+    <FeeRow Level="Senior (Gr 10–11)"  Collected="$10,800" Target="$14,000" Pct="77" BarColor="#3B82F6" />
+    <FeeRow Level="A-Level (Gr 12)"    Collected="$6,800"  Target="$8,500"  Pct="80" BarColor="#10B981" />
+
+    <MudDivider Class="my-3" />
+
+    <!-- Totals -->
+    <div class="d-flex justify-space-between align-center">
+        <MudText Typo="Typo.caption" Style="font-weight:700;font-size:12px;">Total Collected</MudText>
+        <MudText Typo="Typo.caption" Style="font-weight:700;font-size:13px;color:#10B981;">$48,200</MudText>
+    </div>
+    <div class="d-flex justify-space-between align-center mt-1">
+        <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:12px;">Outstanding</MudText>
+        <MudText Typo="Typo.caption" Style="font-weight:700;font-size:13px;color:#EF4444;">$10,300</MudText>
+    </div>
+</MudPaper>
+
+@code { }

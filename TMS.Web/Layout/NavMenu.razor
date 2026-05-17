@@ -1,39 +1,107 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">TMS.Web</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+﻿@using TMS.Web.Auth
+@inject TmsAuthStateProvider AuthProvider
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Authorization
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-    </nav>
-</div>
-
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
+<style>
+    .nav-section-label {
+        padding: 14px 14px 4px;
     }
-}
+
+        .nav-section-label span {
+            font-size: 9px;
+            letter-spacing: 1.8px;
+            font-weight: 700;
+
+            color: var(--mud-palette-text-secondary);
+            text-transform: uppercase;
+        }
+</style>
+
+<MudNavMenu Style="padding: 0 8px;">
+
+    <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
+    <MudNavLink Href="/admin/dashboard"
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Outlined.Dashboard">
+        Dashboard
+    </MudNavLink>
+
+    <!-- ── MODULES ───────────────────────────────────────────────────────── -->
+    <div class="nav-section-label"><span>Modules</span></div>
+
+    <AuthorizeView Roles="Admin,Accountant">
+        <MudNavGroup Title="Students" Icon="@Icons.Material.Outlined.School" Expanded="false">
+            <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.People">
+                All Students
+            </MudNavLink>
+            <MudNavLink Href="/students/new" Icon="@Icons.Material.Outlined.PersonAdd">
+                Add Student
+            </MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Admin,Tutor">
+        <MudNavGroup Title="Tutors" Icon="@Icons.Material.Outlined.SupervisedUserCircle" Expanded="false">
+            <MudNavLink Href="/tutors" Icon="@Icons.Material.Outlined.People">All Tutors</MudNavLink>
+            <MudNavLink Href="/tutors/new" Icon="@Icons.Material.Outlined.PersonAdd">Add Tutor</MudNavLink>
+        </MudNavGroup>
+
+        <MudNavGroup Title="Courses & Classes" Icon="@Icons.Material.Outlined.Book" Expanded="false">
+            <MudNavLink Href="/courses" Icon="@Icons.Material.Outlined.LibraryBooks">Courses</MudNavLink>
+            <MudNavLink Href="/classes" Icon="@Icons.Material.Outlined.EventNote">Classes</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
+   @*  <AuthorizeView Roles="Admin,Tutor">
+        <MudNavLink Href="/attendance" Icon="@Icons.Material.Outlined.HowToReg">
+            Attendance
+        </MudNavLink>
+        <MudNavGroup Title="Exams" Icon="@Icons.Material.Outlined.Assignment" Expanded="false">
+            <MudNavLink Href="/exams" Icon="@Icons.Material.Outlined.Quiz">All Exams</MudNavLink>
+            <MudNavLink Href="/exams/results" Icon="@Icons.Material.Outlined.Grading">Results</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView> *@
+    <AuthorizeView Roles="Admin,Accountant,Tutor">
+    <!-- Study Materials (all roles) -->
+        <MudNavGroup Title="Study Materials" Icon="@Icons.Material.Outlined.AutoStories" Expanded="false">
+@*             <MudNavLink Href="/study-materials" Icon="@Icons.Material.Outlined.GridView">Browse Subjects</MudNavLink> *@
+            <MudNavLink Href="/study-material" Icon="@Icons.Material.Outlined.GridView">Study Material</MudNavLink>
+      @*       <MudNavLink Href="/study-materials/bookmarks" Icon="@Icons.Material.Outlined.Bookmark">My Bookmarks</MudNavLink>
+            <MudNavLink Href="/study-materials/continue-watching" Icon="@Icons.Material.Outlined.PlayCircle">Continue Watching</MudNavLink> *@
+    </MudNavGroup>
+    </AuthorizeView>
+
+    <!-- ── Student-only ───────────────────────────────────────────────────── -->
+    <AuthorizeView Roles="Student">
+        <div class="nav-section-label"><span>My Learning</span></div>
+        <MudNavLink Href="/my-classes" Icon="@Icons.Material.Outlined.EventNote">My Classes</MudNavLink>
+        <MudNavLink Href="/my-attendance" Icon="@Icons.Material.Outlined.HowToReg">My Attendance</MudNavLink>
+        <MudNavLink Href="/my-results" Icon="@Icons.Material.Outlined.EmojiEvents">My Results</MudNavLink>
+        <MudNavLink Href="/my-invoices" Icon="@Icons.Material.Outlined.Receipt">My Invoices</MudNavLink>
+    </AuthorizeView>
+
+    <!-- ── FINANCE ────────────────────────────────────────────────────────── -->
+    <AuthorizeView Roles="Admin,Accountant">
+        <div class="nav-section-label"><span>Finance</span></div>
+        <MudNavGroup Title="Finance" Icon="@Icons.Material.Outlined.Payments" Expanded="false">
+            <MudNavLink Href="/invoices" Icon="@Icons.Material.Outlined.Receipt">Invoices</MudNavLink>
+            <MudNavLink Href="/payments" Icon="@Icons.Material.Outlined.AttachMoney">Payments</MudNavLink>
+            <MudNavLink Href="/fee-structures" Icon="@Icons.Material.Outlined.PriceChange">Fee Structures</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
+    <!-- ── SETTINGS ───────────────────────────────────────────────────────── -->
+    <AuthorizeView Roles="Admin,Accountant">
+        <div class="nav-section-label"><span>Settings</span></div>
+        <MudNavGroup Title="Reports" Icon="@Icons.Material.Outlined.BarChart" Expanded="false">
+            <MudNavLink Href="/reports/attendance" Icon="@Icons.Material.Outlined.PieChart">Attendance</MudNavLink>
+            <MudNavLink Href="/reports/finance" Icon="@Icons.Material.Outlined.TrendingUp">Financial</MudNavLink>
+            <MudNavLink Href="/reports/performance" Icon="@Icons.Material.Outlined.Insights">Performance</MudNavLink>
+        </MudNavGroup>
+        <MudNavLink Href="/settings" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
+    </AuthorizeView>
+
+</MudNavMenu>
+
+@code { }

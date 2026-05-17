@@ -22,8 +22,6 @@ public class JwtTokenService : IJwtTokenService
     public JwtTokenService(IOptions<JwtSettings> settings)
         => _settings = settings.Value;
 
-    // ── Access token ──────────────────────────────────────────────────────────
-
     public string GenerateAccessToken(ApplicationUser user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret));
@@ -37,7 +35,6 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.NameIdentifier,     user.Id),
             new Claim(ClaimTypes.Name,               user.FullName),
             new Claim(ClaimTypes.Role,               user.Role.ToString()),
-            new Claim("role",                        user.Role.ToString()),
             new Claim("firstName",                   user.FirstName),
             new Claim("lastName",                    user.LastName),
             new Claim("isActive",                    user.IsActive.ToString())
@@ -53,17 +50,13 @@ public class JwtTokenService : IJwtTokenService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    // ── Refresh token ─────────────────────────────────────────────────────────
-
     public string GenerateRefreshToken()
     {
-        var randomBytes = new byte[64];
+        var bytes = new byte[64];
         using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(randomBytes);
-        return Convert.ToBase64String(randomBytes);
+        rng.GetBytes(bytes);
+        return Convert.ToBase64String(bytes);
     }
-
-    // ── Extract principal from expired token (for refresh flow) ───────────────
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
@@ -72,7 +65,7 @@ public class JwtTokenService : IJwtTokenService
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidateLifetime = false,   // ← allow expired tokens here
+            ValidateLifetime = false,   // allow expired tokens for refresh flow
             ValidIssuer = _settings.Issuer,
             ValidAudience = _settings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(
@@ -81,10 +74,10 @@ public class JwtTokenService : IJwtTokenService
 
         try
         {
-            var handler = new JwtSecurityTokenHandler();
-            var principal = handler.ValidateToken(token, validationParams, out var securityToken);
+            var principal = new JwtSecurityTokenHandler()
+                .ValidateToken(token, validationParams, out var raw);
 
-            if (securityToken is not JwtSecurityToken jwt ||
+            if (raw is not JwtSecurityToken jwt ||
                 !jwt.Header.Alg.Equals(
                     SecurityAlgorithms.HmacSha256,
                     StringComparison.InvariantCultureIgnoreCase))
@@ -92,9 +85,6 @@ public class JwtTokenService : IJwtTokenService
 
             return principal;
         }
-        catch
-        {
-            return null;
-        }
+        catch { return null; }
     }
 }

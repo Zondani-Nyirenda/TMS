@@ -1,0 +1,153 @@
+﻿@inject IJSRuntime JS
+@implements IAsyncDisposable
+@using MudBlazor
+
+@if (_visible)
+{
+    <div class="pwa-overlay" @onclick="Dismiss">
+        <div class="pwa-dialog" @onclick:stopPropagation="true">
+
+            <div class="pwa-icon">
+                <MudIcon Icon="@Icons.Material.Rounded.School"
+                         Style="font-size:32px; color:#6366F1;" />
+            </div>
+
+            <div class="pwa-text">
+                <h3>Install TMS</h3>
+                <p>Get the full app experience — works offline, loads faster, and lives on your desktop or home screen.</p>
+            </div>
+
+            <div class="pwa-actions">
+                <MudButton FullWidth="true"
+                           Variant="Variant.Filled"
+                           Style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;border-radius:10px;text-transform:none;font-weight:600;"
+                           StartIcon="@Icons.Material.Rounded.InstallDesktop"
+                           OnClick="InstallAsync">
+                    Install App
+                </MudButton>
+                <MudButton FullWidth="true"
+                           Variant="Variant.Text"
+                           Style="color:#9CA3AF;text-transform:none;font-size:13px;"
+                           OnClick="Dismiss">
+                    Maybe later
+                </MudButton>
+            </div>
+
+        </div>
+    </div>
+}
+
+<style>
+    .pwa-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .pwa-dialog {
+        background: #13151F;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 20px;
+        padding: 36px 32px;
+        max-width: 400px;
+        width: calc(100% - 48px);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        animation: slideUp 0.25s ease;
+    }
+
+    .pwa-icon {
+        width: 64px;
+        height: 64px;
+        background: rgba(99,102,241,0.12);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pwa-text h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 700;
+        color: #F9FAFB;
+        letter-spacing: -0.4px;
+    }
+
+    .pwa-text p {
+        margin: 0;
+        font-size: 13px;
+        color: #9CA3AF;
+        line-height: 1.6;
+    }
+
+    .pwa-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    @@keyframes slideUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+</style>
+
+@code {
+    private bool _visible = false;
+    private DotNetObjectReference<InstallPwaDialog>? _objRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _objRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("pwaInstall.init", _objRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnInstallAvailable()
+    {
+        // Only show if user hasn't dismissed before
+        var dismissed = false; // we'll check via JS below
+        _visible = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnInstalled()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    private async Task InstallAsync()
+    {
+        _visible = false;
+        await JS.InvokeVoidAsync("pwaInstall.prompt");
+    }
+
+    private void Dismiss()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("pwaInstall.dispose");
+        _objRef?.Dispose();
+    }
+}

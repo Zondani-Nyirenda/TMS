@@ -8,6 +8,7 @@ namespace TMS.Domain.Interfaces;
 /// </summary>
 public interface IUnitOfWork : IDisposable
 {
+    // ── Core repositories ─────────────────────────────────────────────────────
     IRepository<Student> Students { get; }
     IRepository<Tutor> Tutors { get; }
     IRepository<Course> Courses { get; }
@@ -23,6 +24,23 @@ public interface IUnitOfWork : IDisposable
     IRepository<Result> Results { get; }
     IRepository<Notification> Notifications { get; }
 
+    // ── Study Materials Module ────────────────────────────────────────────────
+    IRepository<Subject> Subjects { get; }
+    IRepository<MaterialCategory> MaterialCategories { get; }
+    IRepository<StudyMaterial> StudyMaterials { get; }
+    IRepository<SubjectClassMapping> SubjectClassMappings { get; }
+    IRepository<MaterialDownload> MaterialDownloads { get; }
+    IRepository<MaterialBookmark> MaterialBookmarks { get; }
+    IRepository<VideoProgress> VideoProgresses { get; }
+
+    IRepository<ContentModule> ContentModules { get; }
+    IRepository<ContentItem> ContentItems { get; }
+    IRepository<ContentItemAccess> ContentItemAccesses { get; }
+    IRepository<StudentContentProgress> StudentContentProgress { get; }
+
+
+
+    // ── Unit of Work operations ───────────────────────────────────────────────
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     Task BeginTransactionAsync(CancellationToken ct = default);
     Task CommitTransactionAsync(CancellationToken ct = default);

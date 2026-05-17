@@ -1,0 +1,159 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Application.DTOs.Course
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Class="mr-2" />
+            @(Course is null ? "New Course" : "Edit Course")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+                <MudItem xs="12" sm="5">
+                    <MudTextField @bind-Value="_code" Label="Course Code" Variant="Variant.Outlined"
+                                  Required="true" Placeholder="e.g. MATH-G12"
+                                  Disabled="@(Course is not null)"
+                                  HelperText="Uppercase, no spaces" />
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="_name" Label="Course Name" Variant="Variant.Outlined" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_subject" Label="Subject" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_gradeLevel" Label="Grade Level" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined"
+                                  Lines="3" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="_feeAmount" Label="Monthly Fee" Variant="Variant.Outlined"
+                                     Adornment="Adornment.Start" AdornmentText="ZMW" Min="0" Format="N2" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="_maxCapacity" Label="Max Capacity" Variant="Variant.Outlined"
+                                     Min="1" Max="500" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="_durationWeeks" Label="Duration (weeks)" Variant="Variant.Outlined"
+                                     Min="1" />
+                </MudItem>
+
+                @if (Course is not null)
+                {
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_status" Label="Status" Variant="Variant.Outlined">
+                            @foreach (var s in Enum.GetValues<CourseStatus>())
+                            {
+                                <MudSelectItem Value="@s">@s</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public CourseDto? Course { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid = true;
+    private bool _saving;
+
+    private string _code = string.Empty;
+    private string _name = string.Empty;
+    private string _subject = string.Empty;
+    private string _gradeLevel = string.Empty;
+    private string _description = string.Empty;
+    private decimal _feeAmount = 0;
+    private int _maxCapacity = 30;
+    private int _durationWeeks = 12;
+    private CourseStatus _status = CourseStatus.Active;
+
+    protected override void OnParametersSet()
+    {
+        if (Course is null) return;
+
+        _code = Course.Code ?? "";
+        _name = Course.Name ?? "";
+        _subject = Course.Subject ?? "";
+        _gradeLevel = Course.GradeLevel ?? "";
+        _description = Course.Description ?? "";
+        _feeAmount = Course.FeeAmount;
+        _maxCapacity = Course.MaxCapacity;
+        _durationWeeks = Course.DurationWeeks;
+        _status = Course.Status;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+
+        ApiResult<CourseDto> result;
+
+        if (Course is null)
+        {
+            result = await Api.PostAsync<CourseDto>("api/courses", new CreateCourseRequest
+            {
+                Code = _code?.Trim() ?? "",
+                Name = _name?.Trim() ?? "",
+                Subject = _subject?.Trim() ?? "",
+                GradeLevel = _gradeLevel?.Trim() ?? "",
+                Description = _description?.Trim() ?? "",
+                FeeAmount = _feeAmount,
+                MaxCapacity = _maxCapacity,
+                DurationWeeks = _durationWeeks
+            });
+        }
+        else
+        {
+            result = await Api.PutAsync<CourseDto>($"api/courses/{Course.Id}", new UpdateCourseRequest
+            {
+                Name = _name?.Trim() ?? "",
+                Subject = _subject?.Trim() ?? "",
+                GradeLevel = _gradeLevel?.Trim() ?? "",
+                Description = _description?.Trim() ?? "",
+                FeeAmount = _feeAmount,
+                MaxCapacity = _maxCapacity,
+                DurationWeeks = _durationWeeks,
+                Status = _status
+            });
+        }
+
+        if (result.Success)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            // Show the exact error from the server
+            Snackbar.Add(result.Error ?? "Save failed. Check browser console for details.", Severity.Error);
+        
+            // Also log to console for debugging
+            Console.WriteLine($"Create Course Failed: {result.Error}");
+        }
+
+        _saving = false;
+    }
+}

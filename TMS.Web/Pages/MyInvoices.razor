@@ -1,0 +1,208 @@
+﻿@page "/my-invoices"
+@using Microsoft.AspNetCore.Authorization
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Payment
+@using TMS.Domain.Enums
+@using TMS.Web.Auth
+@using TMS.Web.Services
+@attribute [Authorize(Roles = "Student,Parent")]
+@inject ApiClient Api
+@inject TmsAuthStateProvider AuthProvider
+@using MudBlazor
+
+<PageTitle>My Invoices – TMS</PageTitle>
+
+<MudText Typo="Typo.h5" Class="fw-bold mb-1">My Invoices</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Your fee invoices and payment history
+</MudText>
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 3; i++)
+        {
+            <MudItem xs="12">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" Class="rounded-xl" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else
+{
+    <!-- Balance summary -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Primary">
+                    ZMW @_totalInvoiced.ToString("N0")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Billed</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Success">
+                    ZMW @_totalPaid.ToString("N0")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Paid</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center"
+                      Style="@(_totalBalance > 0 ? "border:2px solid var(--mud-palette-warning)" : "")">
+                <MudText Typo="Typo.h5" Class="fw-bold"
+                         Color="@(_totalBalance > 0 ? Color.Error : Color.Success)">
+                    ZMW @_totalBalance.ToString("N0")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Outstanding Balance</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_overdueInvoices.Any())
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            <MudText>
+                You have <strong>@_overdueInvoices.Count overdue invoice(s)</strong> totalling
+                <strong>ZMW @_overdueInvoices.Sum(i => i.BalanceAmount).ToString("N0")</strong>.
+                Please contact admin to arrange payment.
+            </MudText>
+        </MudAlert>
+    }
+
+    <!-- Invoice list -->
+    <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Invoice History</MudText>
+
+    @foreach (var inv in _invoices.OrderByDescending(i => i.IssueDate))
+    {
+        <MudPaper Elevation="1" Class="pa-4 mb-3 rounded-xl">
+            <div class="d-flex align-start justify-space-between flex-wrap gap-3">
+                <div>
+                    <div class="d-flex align-center gap-2 mb-1">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold">@inv.InvoiceNumber</MudText>
+                        <MudChip Size="Size.Small" Color="@StatusColor(inv.Status)"  T="String" Label="true">
+                            @inv.Status
+                        </MudChip>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Issued: @inv.IssueDate.ToString("dd MMM yyyy") ·
+                        Due: <span class="@(inv.DueDate < DateTime.Today && inv.Status != InvoiceStatus.Paid ? "mud-error-text fw-bold" : "")">
+                            @inv.DueDate.ToString("dd MMM yyyy")
+                        </span>
+                    </MudText>
+                </div>
+                <div class="text-right">
+                    <MudText Typo="Typo.h6" Class="fw-bold">
+                        @inv.Currency @inv.TotalAmount.ToString("N2")
+                    </MudText>
+                    @if (inv.BalanceAmount > 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error">
+                            Balance: @inv.Currency @inv.BalanceAmount.ToString("N2")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Success">Fully paid</MudText>
+                    }
+                </div>
+            </div>
+
+            <!-- Line items -->
+            @if (inv.LineItems?.Any() == true)
+            {
+                <MudDivider Class="my-3" />
+                <div class="d-flex flex-column gap-1">
+                    @foreach (var li in inv.LineItems)
+                    {
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @li.Description @(li.Quantity > 1 ? $"× {li.Quantity}" : "")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                @inv.Currency @li.LineTotal.ToString("N2")
+                            </MudText>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Payment history -->
+            @if (inv.Payments?.Any() == true)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.caption" Class="fw-bold mb-2" Color="Color.Secondary">
+                    PAYMENTS
+                </MudText>
+                @foreach (var p in inv.Payments)
+                {
+                    <div class="d-flex justify-space-between align-center mb-1">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                     Size="Size.Small" Color="Color.Success" />
+                            <MudText Typo="Typo.body2">
+                                @p.PaymentDate.ToString("dd MMM yyyy") · @p.Method
+                            </MudText>
+                            @if (!string.IsNullOrEmpty(p.Reference))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Ref: @p.Reference
+                                </MudText>
+                            }
+                        </div>
+                        <MudText Typo="Typo.body2" Class="fw-bold" Color="Color.Success">
+                            + @inv.Currency @p.Amount.ToString("N2")
+                        </MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+    }
+
+    @if (!_invoices.Any())
+    {
+        <div class="d-flex flex-column align-center pa-12">
+            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong"
+                     Style="font-size:4rem" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">No invoices yet</MudText>
+        </div>
+    }
+}
+
+@code {
+    private bool   _loading = true;
+    private decimal _totalInvoiced = 0, _totalPaid = 0, _totalBalance = 0;
+
+    private List<InvoiceDto> _invoices        = new();
+    private List<InvoiceDto> _overdueInvoices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await AuthProvider.GetCurrentUserAsync();
+        if (user is null) { _loading = false; return; }
+
+        // Load invoices for the current user's student record
+        var r = await Api.GetAsync<PagedResult<InvoiceDto>>("api/payments/invoices?pageSize=100");
+        if (r.Success && r.Data is not null)
+        {
+            _invoices = r.Data.Items.ToList();
+            _totalInvoiced = _invoices.Sum(i => i.TotalAmount);
+            _totalPaid     = _invoices.Sum(i => i.PaidAmount);
+            _totalBalance  = _invoices.Sum(i => i.BalanceAmount);
+            _overdueInvoices = _invoices
+                .Where(i => i.DueDate < DateTime.Today && i.Status != InvoiceStatus.Paid)
+                .ToList();
+        }
+        _loading = false;
+    }
+
+    private static Color StatusColor(InvoiceStatus s) => s switch
+    {
+        InvoiceStatus.Paid          => Color.Success,
+        InvoiceStatus.PartiallyPaid => Color.Warning,
+        InvoiceStatus.Overdue       => Color.Error,
+        InvoiceStatus.Sent          => Color.Info,
+        _                           => Color.Default
+    };
+}

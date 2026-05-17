@@ -1,0 +1,218 @@
+﻿@page "/students/new"
+@page "/students/{Id:guid}/edit"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Web.Services
+@* @attribute [Authorize(Roles = "Admin,Accountant")] *@
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject TMS.Web.Auth.TmsAuthStateProvider AuthProvider
+
+<PageTitle>@(_isNew ? "Add Student" : "Edit Student") – TMS</PageTitle>
+
+<!-- Breadcrumb -->
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4 px-0" />
+
+<MudText Typo="Typo.h5" Class="fw-bold mb-6">
+    @(_isNew ? "Add New Student" : $"Edit — {_form?.FirstName} {_form?.LastName}")
+</MudText>
+
+<MudForm @ref="_mudForm" @bind-IsValid="_valid">
+    <MudGrid>
+        <!-- ── Personal Info ───────────────────────────────────────────── -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Personal Information</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.FirstName" Label="First Name"
+                          Variant="Variant.Outlined" Required="true"
+                          RequiredError="First name is required" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.LastName" Label="Last Name"
+                          Variant="Variant.Outlined" Required="true"
+                          RequiredError="Last name is required" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.Email" Label="Email"
+                          Variant="Variant.Outlined" InputType="InputType.Email"
+                          Required="true" RequiredError="Email is required" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.PhoneNumber" Label="Phone Number"
+                          Variant="Variant.Outlined" Required="true"
+                          RequiredError="Phone number is required" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudDatePicker @bind-Date="_dobDate" Label="Date of Birth"
+                           Variant="Variant.Outlined" Editable="true"
+                           MaxDate="DateTime.Today.AddYears(-3)" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect @bind-Value="_form.Gender" Label="Gender"
+                       Variant="Variant.Outlined">
+                @foreach (var g in Enum.GetValues<TMS.Domain.Enums.Gender>())
+                {
+                    <MudSelectItem Value="@g">@g</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <!-- ── Guardian ───────────────────────────────────────────────── -->
+        <MudItem xs="12" Class="mt-4">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Guardian / Parent</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.GuardianName" Label="Guardian Full Name"
+                          Variant="Variant.Outlined" Required="true"
+                          RequiredError="Guardian name is required" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.GuardianRelationship" Label="Relationship"
+                          Variant="Variant.Outlined" Required="true"
+                          Placeholder="e.g. Mother, Father, Uncle" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.GuardianPhone" Label="Guardian Phone"
+                          Variant="Variant.Outlined" Required="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_form.GuardianEmail" Label="Guardian Email"
+                          Variant="Variant.Outlined" InputType="InputType.Email" />
+        </MudItem>
+
+        <!-- ── Address ────────────────────────────────────────────────── -->
+        <MudItem xs="12" Class="mt-4">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Address (Optional)</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_form.Street" Label="Street Address"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_form.City" Label="City"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_form.Province" Label="Province / State"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_form.Country" Label="Country"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" Class="mt-4">
+            <MudTextField @bind-Value="_form.Notes" Label="Notes"
+                          Variant="Variant.Outlined" Lines="3"
+                          Placeholder="Any additional notes about this student…" />
+        </MudItem>
+
+        <!-- ── Actions ────────────────────────────────────────────────── -->
+        <MudItem xs="12" Class="d-flex justify-end gap-3 mt-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       OnClick="@(() => Nav.NavigateTo("/students"))">
+                Cancel
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       OnClick="SaveAsync" Disabled="_saving"
+                       StartIcon="@Icons.Material.Filled.Save">
+                @(_saving ? "Saving…" : (_isNew ? "Create Student" : "Save Changes"))
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudForm>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private MudForm _mudForm = null!;
+    private bool _valid = false;
+    private bool _saving = false;
+    private bool _isNew => Id is null;
+
+    private TMS.Application.DTOs.Student.CreateStudentRequest _form = new()
+    {
+        Country = "Zambia"
+    };
+
+    private DateTime? _dobDate;
+
+    private List<BreadcrumbItem> _breadcrumbs => new()
+    {
+        new("Home",     href: "/"),
+        new("Students", href: "/students"),
+        new(_isNew ? "Add Student" : "Edit Student", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Wait for LocalStorage to be ready so the token is attached
+        await AuthProvider.AuthReady;
+
+        if (!_isNew && Id.HasValue)
+            await LoadStudentAsync(Id.Value);
+    }
+
+    private async Task LoadStudentAsync(Guid id)
+    {
+        var result = await Api.GetAsync<TMS.Application.DTOs.Student.StudentDto>(
+            $"api/students/{id}");
+
+        if (result.Success && result.Data is not null)
+        {
+            var s = result.Data;
+            _form.FirstName = s.FirstName;
+            _form.LastName = s.LastName;
+            _form.Email = s.Email;
+            _form.PhoneNumber = s.PhoneNumber;
+            _form.Gender = s.Gender;
+            _form.GuardianName = s.GuardianName;
+            _form.GuardianPhone = s.GuardianPhone;
+            _form.GuardianEmail = s.GuardianEmail;
+            _form.GuardianRelationship = s.GuardianRelationship;
+            _form.Street = s.Street;
+            _form.City = s.City;
+            _form.Province = s.Province;
+            _form.Country = s.Country ?? "Zambia";
+            _dobDate = s.DateOfBirth;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await _mudForm.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+        _form.DateOfBirth = _dobDate ?? DateTime.Today.AddYears(-10);
+
+        ApiResult<TMS.Application.DTOs.Student.StudentDto> result;
+
+        if (_isNew)
+            result = await Api.PostAsync<TMS.Application.DTOs.Student.StudentDto>(
+                "api/students", _form);
+        else
+            result = await Api.PutAsync<TMS.Application.DTOs.Student.StudentDto>(
+                $"api/students/{Id}", _form);
+
+        if (result.Success)
+        {
+            Snackbar.Add(
+                _isNew ? "Student created successfully!" : "Student updated.",
+                Severity.Success);
+            Nav.NavigateTo("/students");
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Save failed.", Severity.Error);
+        }
+
+        _saving = false;
+    }
+}

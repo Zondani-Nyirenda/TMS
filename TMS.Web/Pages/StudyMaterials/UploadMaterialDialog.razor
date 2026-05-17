@@ -1,0 +1,207 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@using System.IO
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Upload Material</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_title"
+                              Label="Title *"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_description"
+                              Label="Description"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect @bind-Value="_type"
+                           Label="Material Type *"
+                           Variant="Variant.Outlined"
+                           FullWidth="true">
+                    @foreach (MaterialType t in Enum.GetValues<MaterialType>())
+                    {
+                        <MudSelectItem Value="@t">@t</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect @bind-Value="_fileType"
+                           Label="File Type *"
+                           Variant="Variant.Outlined"
+                           FullWidth="true">
+                    @foreach (MaterialFileType ft in Enum.GetValues<MaterialFileType>())
+                    {
+                        <MudSelectItem Value="@ft">@ft</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudTextField @bind-Value="_gradeLevel"
+                              Label="Grade Level"
+                              Placeholder="e.g. Grade 12"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudNumericField @bind-Value="_academicYear"
+                                 Label="Academic Year"
+                                 Placeholder="e.g. 2024"
+                                 Variant="Variant.Outlined"
+                                 FullWidth="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_tags"
+                              Label="Tags"
+                              Placeholder="e.g. ECZ,Paper1,2024"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="_allowDownload"
+                           Label="Allow Download"
+                           Color="Color.Primary" />
+            </MudItem>
+
+            <!-- File picker -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">File *</MudText>
+                <InputFile id="fileInput" OnChange="OnFileSelected" hidden />
+                <MudButton HtmlTag="label"
+                           Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.AttachFile"
+                           for="fileInput">
+                    Choose File
+                </MudButton>
+                @if (!string.IsNullOrWhiteSpace(_fileName))
+                {
+                    <MudText Typo="Typo.body2" Class="mt-1 ml-2" Style="display:inline">
+                        @_fileName (@FormatBytes(_fileSizeBytes))
+                    </MudText>
+                }
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="SubmitAsync"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="@(_saving || string.IsNullOrWhiteSpace(_fileBase64))">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Uploading…</span>
+            }
+            else
+            {
+                <span>Upload</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid CategoryId { get; set; }
+
+    private string _title = string.Empty;
+    private string? _description;
+    private MaterialType _type = MaterialType.Notes;
+    private MaterialFileType _fileType = MaterialFileType.Pdf;
+    private string? _gradeLevel;
+    private int? _academicYear;
+    private string? _tags;
+    private bool _allowDownload = true;
+    private bool _saving;
+
+    // File state
+    private string? _fileBase64;
+    private string _fileName = string.Empty;
+    private string _mimeType = string.Empty;
+    private long _fileSizeBytes;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        _fileName = file.Name;
+        _mimeType = file.ContentType;
+        _fileSizeBytes = file.Size;
+
+        // Read file as base64 — max 500MB
+        const long maxSize = 500 * 1024 * 1024;
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        _fileBase64 = Convert.ToBase64String(ms.ToArray());
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            Snackbar.Add("Title is required.", Severity.Warning);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_fileBase64))
+        {
+            Snackbar.Add("Please select a file.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+
+        var request = new CreateStudyMaterialRequest
+        {
+            CategoryId = CategoryId,
+            Title = _title,
+            Description = _description,
+            Type = _type,
+            FileType = _fileType,
+            AllowDownload = _allowDownload,
+            GradeLevel = _gradeLevel,
+            AcademicYear = _academicYear,
+            Tags = _tags,
+            FileBase64 = _fileBase64,
+            FileName = _fileName,
+            MimeType = _mimeType,
+            FileSizeBytes = _fileSizeBytes
+        };
+
+        var result = await Api.PostAsync<StudyMaterialDto>("api/study-materials", request);
+
+        if (result.Success)
+        {
+            Snackbar.Add("Material uploaded successfully.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+            Snackbar.Add(result.Error ?? "Upload failed.", Severity.Error);
+
+        _saving = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1048576 => $"{bytes / 1024.0:F1} KB",
+        < 1073741824 => $"{bytes / 1048576.0:F1} MB",
+        _ => $"{bytes / 1073741824.0:F1} GB"
+    };
+}

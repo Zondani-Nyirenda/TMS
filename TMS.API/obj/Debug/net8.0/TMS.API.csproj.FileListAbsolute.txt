@@ -146,6 +146,7 @@ C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\D
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\TMS.API.csproj.CoreCompileInputs.cache
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\TMS.API.MvcApplicationPartsAssemblyInfo.cs
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\TMS.API.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\TMS.API.sourcelink.json
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\rjimswa.dswa.cache.json
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
 C:\Users\WamutoGeneralDealers\source\repos\TuitionManagementSystem\TMS.API\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json

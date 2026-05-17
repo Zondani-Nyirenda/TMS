@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using TMS.Domain.Enums;
 
 namespace TMS.Application.DTOs.Auth;
@@ -52,6 +53,7 @@ public class UserDto
     public string Id { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public UserRole Role { get; set; }
     public string? ProfilePhotoUrl { get; set; }
     public bool IsActive { get; set; }

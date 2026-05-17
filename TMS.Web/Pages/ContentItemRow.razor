@@ -1,0 +1,112 @@
+﻿@* Reusable row for a single ContentItem inside the module accordion *@
+@using MudBlazor
+@using TMS.Application.DTOs.Content
+@using TMS.Domain.Enums
+
+<MudListItem @key="Item.Id" Style="@(Item.IsCompleted ? "opacity:0.8" : "")" T="string">
+    <div class="d-flex align-center gap-3 w-100 py-1">
+
+        <!-- Resource type icon -->
+        <MudTooltip Text="@Item.ResourceType.ToString()">
+            <MudIcon Icon="@ResourceIcon" Color="@ResourceColor" />
+        </MudTooltip>
+
+        <!-- Title + meta -->
+        <div class="flex-grow-1" style="min-width:0">
+            <MudText Typo="Typo.body2" Class="@(Item.IsCompleted ? "text-decoration-line-through" : "fw-semibold")"
+                     Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                @Item.Title
+            </MudText>
+            <div class="d-flex align-center gap-2 flex-wrap">
+                @if (!string.IsNullOrEmpty(Item.FileSizeDisplay))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" >@Item.FileSizeDisplay</MudText>
+                }
+                @if (Item.DurationSeconds.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @TimeSpan.FromSeconds(Item.DurationSeconds.Value).ToString(@"m\:ss")
+                    </MudText>
+                }
+                @if (!Item.IsPublished)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Label="true">Draft</MudChip>
+                }
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex align-center gap-1">
+            <!-- Complete toggle (students) -->
+            @if (!IsStaff)
+            {
+                <MudTooltip Text="@(Item.IsCompleted ? "Mark incomplete" : "Mark complete")">
+                    <MudIconButton Icon="@(Item.IsCompleted
+                                           ? Icons.Material.Filled.CheckCircle
+                                           : Icons.Material.Outlined.RadioButtonUnchecked)"
+                                   Color="@(Item.IsCompleted ? Color.Success : Color.Default)"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OnMarkComplete.InvokeAsync())" />
+                </MudTooltip>
+            }
+
+            <!-- Download / open -->
+            <MudTooltip Text="@(Item.ResourceType == ResourceType.Link ? "Open link" : "Download")">
+                <MudIconButton Icon="@(Item.ResourceType == ResourceType.Link
+                                        ? Icons.Material.Filled.OpenInNew
+                                        : Icons.Material.Filled.Download)"
+                               Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => OnDownload.InvokeAsync())" />
+            </MudTooltip>
+
+            <!-- Delete (staff only) -->
+            @if (IsStaff)
+            {
+                <MudTooltip Text="Delete">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => OnDelete.InvokeAsync())" />
+                </MudTooltip>
+            }
+        </div>
+    </div>
+</MudListItem>
+<MudDivider />
+
+@code {
+    [Parameter, EditorRequired] public ContentItemSummaryDto Item      { get; set; } = null!;
+    [Parameter] public EventCallback OnMarkComplete { get; set; }
+    [Parameter] public EventCallback OnDownload     { get; set; }
+    [Parameter] public EventCallback OnDelete       { get; set; }
+    [Parameter] public bool          IsStaff        { get; set; }
+
+    private string ResourceIcon => Item.ResourceType switch
+    {
+        ResourceType.Video    => Icons.Material.Filled.PlayCircle,
+        ResourceType.Audio    => Icons.Material.Filled.Audiotrack,
+        ResourceType.Image    => Icons.Material.Filled.Image,
+        ResourceType.Link     => Icons.Material.Filled.Link,
+        ResourceType.Archive  => Icons.Material.Filled.FolderZip,
+        _                     => Icons.Material.Filled.Description   // Document / Other
+    };
+
+    private Color ResourceColor => Item.ResourceType switch
+    {
+        ResourceType.Video    => Color.Error,
+        ResourceType.Audio    => Color.Secondary,
+        ResourceType.Image    => Color.Success,
+        ResourceType.Link     => Color.Info,
+        ResourceType.Archive  => Color.Warning,
+        _                     => Color.Primary
+    };
+
+    private string FileSizeDisplay => Item.FileSizeBytes.HasValue
+        ? Item.FileSizeBytes.Value switch
+        {
+            < 1024               => $"{Item.FileSizeBytes} B",
+            < 1024 * 1024        => $"{Item.FileSizeBytes.Value / 1024.0:F1} KB",
+            < 1024L * 1024 * 1024 => $"{Item.FileSizeBytes.Value / (1024.0 * 1024):F1} MB",
+            _                    => $"{Item.FileSizeBytes.Value / (1024.0 * 1024 * 1024):F1} GB"
+        }
+        : string.Empty;
+}

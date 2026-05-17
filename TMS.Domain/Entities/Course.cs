@@ -65,6 +65,9 @@ public class Class : BaseEntity
     // Computed
     public int EnrolledCount => StudentClasses.Count(sc => sc.Status == EnrollmentStatus.Active);
     public bool IsFull => EnrolledCount >= MaxCapacity;
+
+    // Inside Class : BaseEntity — add to navigation collections
+    public ICollection<SubjectClassMapping> SubjectMappings { get; set; } = new List<SubjectClassMapping>();
 }
 
 /// <summary>

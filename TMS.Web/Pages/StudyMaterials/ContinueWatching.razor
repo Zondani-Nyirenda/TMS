@@ -1,0 +1,142 @@
+﻿@page "/study-materials/continue-watching"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Web.Services
+
+<PageTitle>Continue Watching – TMS</PageTitle>
+
+<div Class="d-flex align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">▶️ Continue Watching</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Pick up where you left off
+        </MudText>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 3; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="120px" />
+                    <MudSkeleton Class="mt-2" />
+                    <MudSkeleton Width="50%" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (!_progresses.Any())
+{
+    <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+        <MudIcon Icon="@Icons.Material.Filled.PlayCircle"
+                 Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">
+            Nothing in progress
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Start watching a video lesson to see it here.
+        </MudText>
+        <MudButton Class="mt-4"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(() => Nav.NavigateTo("/study-materials"))">
+            Browse Videos
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        @foreach (var p in _progresses)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="rounded-xl overflow-hidden">
+
+                    <!-- Thumbnail -->
+                    @if (!string.IsNullOrWhiteSpace(p.ThumbnailUrl))
+                    {
+                        <img src="@p.ThumbnailUrl"
+                             alt="@p.MaterialTitle"
+                             style="width:100%;height:140px;object-fit:cover;" />
+                    }
+                    else
+                    {
+                        <div Class="d-flex align-center justify-center"
+                             Style="height:100px;background:#1e1e2e;">
+                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle"
+                                     Style="font-size:3rem;color:#6366F1;" />
+                        </div>
+                    }
+
+                    <!-- Progress bar -->
+                    <MudProgressLinear Value="@p.ProgressPercentage"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Style="margin:0;" />
+
+                    <div Class="pa-3">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold">
+                            @p.MaterialTitle
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @p.SubjectName
+                        </MudText>
+
+                        <div Class="d-flex align-center justify-space-between mt-2">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @p.ProgressPercentage.ToString("F0")% ·
+                                @FormatSeconds(p.ProgressSeconds) remaining
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @p.LastWatchedAt.ToString("MMM dd")
+                            </MudText>
+                        </div>
+
+                        <MudButton Class="mt-2"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                   OnClick="@(() => Nav.NavigateTo(
+                                                                                                      $"/study-materials/view/{p.MaterialId}"))">
+                            Resume
+                        </MudButton>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<VideoProgressDto> _progresses = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        var result = await Api.GetAsync<List<VideoProgressDto>>(
+            "api/study-materials/continue-watching");
+        if (result.Success && result.Data is not null)
+            _progresses = result.Data;
+        else
+            Snackbar.Add(result.Error ?? "Failed to load.", Severity.Error);
+        _loading = false;
+    }
+
+    private static string FormatSeconds(int seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.Hours > 0
+            ? $"{ts.Hours}h {ts.Minutes}m"
+            : $"{ts.Minutes}m {ts.Seconds}s";
+    }
+}

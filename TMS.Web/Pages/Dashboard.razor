@@ -1,0 +1,421 @@
+﻿@page "/admin/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@using TMS.Application.DTOs.Common
+@using TMS.Domain.Enums
+@using TMS.Web.Auth
+@using TMS.Web.Component.Common
+@using TMS.Web.Services
+@attribute [Authorize]
+@inject ApiClient Api
+@inject TmsAuthStateProvider AuthProvider
+@using MudBlazor
+
+<PageTitle>Dashboard – TMS</PageTitle>
+
+<!-- ── Page Header ──────────────────────────────────────────────────── -->
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;">
+            Good @_greeting, @_userName
+        </MudText>
+        <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-secondary);">
+            @DateTime.Now.ToString("dddd, dd MMMM yyyy") · Here's what's happening today
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined"
+               StartIcon="@Icons.Material.Filled.Refresh"
+               Size="Size.Small"
+               OnClick="RefreshAsync"
+               Style="border-radius:9px;font-size:13px;">
+        Refresh
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudGrid Class="mb-4">
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" lg="3">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="118px" Class="rounded-xl" />
+            </MudItem>
+        }
+        <MudItem xs="12" md="8">
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="rounded-xl" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="rounded-xl" />
+        </MudItem>
+    </MudGrid>
+}
+else
+{
+    @if (_apiError is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true"
+                  Icon="@Icons.Material.Filled.WifiOff">
+            @_apiError
+        </MudAlert>
+    }
+
+    <!-- ── Stat Cards ──────────────────────────────────────────────────── -->
+    <MudGrid Class="mb-4">
+
+        <!-- Active Students -->
+        <MudItem xs="12" sm="6" lg="3">
+            <div class="dash-stat-card">
+                <div class="dash-stat-glow" style="background:#6366F1;position:absolute;width:120px;height:120px;border-radius:50%;top:-30px;right:-30px;opacity:0.07;pointer-events:none;"></div>
+                <div class="dash-stat-icon icon-indigo">
+                    <MudIcon Icon="@Icons.Material.Filled.School" Style="color:#6366F1;font-size:20px;" />
+                </div>
+                <div class="stat-label">Active Students</div>
+                <div class="stat-value">@_dash.ActiveStudents</div>
+                <div class="stat-trend">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Style="color:#10B981;font-size:14px;" />
+                    <span style="color:#10B981;">@_dash.TotalStudents total enrolled</span>
+                </div>
+            </div>
+        </MudItem>
+
+        <!-- Active Classes -->
+        <MudItem xs="12" sm="6" lg="3">
+            <div class="dash-stat-card">
+                <div class="dash-stat-glow" style="background:#8B5CF6;position:absolute;width:120px;height:120px;border-radius:50%;top:-30px;right:-30px;opacity:0.07;pointer-events:none;"></div>
+                <div class="dash-stat-icon icon-violet">
+                    <MudIcon Icon="@Icons.Material.Filled.EventNote" Style="color:#8B5CF6;font-size:20px;" />
+                </div>
+                <div class="stat-label">Active Classes</div>
+                <div class="stat-value">@_dash.ActiveClasses</div>
+                <div class="stat-trend">
+                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Style="color:#8B5CF6;font-size:14px;" />
+                    <span style="color:var(--mud-palette-text-secondary);">@_dash.TotalCourses courses available</span>
+                </div>
+            </div>
+        </MudItem>
+
+        <!-- Revenue -->
+        <MudItem xs="12" sm="6" lg="3">
+            <div class="dash-stat-card">
+                <div class="dash-stat-glow" style="background:#10B981;position:absolute;width:120px;height:120px;border-radius:50%;top:-30px;right:-30px;opacity:0.07;pointer-events:none;"></div>
+                <div class="dash-stat-icon icon-green">
+                    <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Style="color:#10B981;font-size:20px;" />
+                </div>
+                <div class="stat-label">Revenue This Month</div>
+                <div class="stat-value" style="font-size:22px;">ZMW @_dash.TotalRevenueThisMonth.ToString("N0")</div>
+                <div class="stat-trend">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Style="color:#10B981;font-size:14px;" />
+                    <span style="color:#10B981;">ZMW @_dash.TotalRevenueThisYear.ToString("N0") this year</span>
+                </div>
+            </div>
+        </MudItem>
+
+        <!-- Outstanding -->
+        <MudItem xs="12" sm="6" lg="3">
+            <div class="dash-stat-card">
+                <div class="dash-stat-glow" style="background:#F59E0B;position:absolute;width:120px;height:120px;border-radius:50%;top:-30px;right:-30px;opacity:0.07;pointer-events:none;"></div>
+                <div class="dash-stat-icon icon-amber">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Style="color:#F59E0B;font-size:20px;" />
+                </div>
+                <div class="stat-label">Outstanding Fees</div>
+                <div class="stat-value" style="font-size:22px;">ZMW @_dash.OutstandingBalance.ToString("N0")</div>
+                <div class="stat-trend">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Style="color:#EF4444;font-size:14px;" />
+                    <span style="color:#EF4444;">ZMW @_dash.OverdueBalance.ToString("N0") overdue</span>
+                </div>
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    <!-- ── Charts Row ──────────────────────────────────────────────────── -->
+    <MudGrid Class="mb-4">
+
+        <!-- Enrolment Bar Chart -->
+        <MudItem xs="12" md="8">
+            <div class="dash-panel">
+                <div class="dash-section-header">
+                    <div>
+                        <div class="dash-panel-title">Enrolment Trend</div>
+                        <div class="dash-panel-sub">New enrolments vs withdrawals · @DateTime.Now.Year</div>
+                    </div>
+                    <div style="display:flex;gap:16px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:#6366F1;flex-shrink:0;"></div>
+                            <span style="font-size:12px;color:var(--mud-palette-text-secondary);">Enrolments</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:#EF4444;flex-shrink:0;"></div>
+                            <span style="font-size:12px;color:var(--mud-palette-text-secondary);">Withdrawals</span>
+                        </div>
+                    </div>
+                </div>
+                <MudChart ChartType="ChartType.Bar"
+                          ChartSeries="@_revenueSeries"
+                          XAxisLabels="@_monthLabels"
+                          Width="100%" Height="250px"
+                          ChartOptions="@(new ChartOptions { YAxisTicks = 5, LineStrokeWidth = 2 })" />
+            </div>
+        </MudItem>
+
+        <!-- Attendance Donut -->
+        <MudItem xs="12" md="4">
+            <div class="dash-panel" style="height:100%;display:flex;flex-direction:column;">
+                <div class="dash-panel-title">Overall Attendance</div>
+                <div class="dash-panel-sub">All classes · current term</div>
+
+                <div class="dash-attendance-ring" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 0 20px;">
+                    <MudChart ChartType="ChartType.Donut"
+                              InputData="@_attendanceData"
+                              InputLabels="@_attendanceLabels"
+                              Width="180px" Height="180px" />
+
+                    <MudText Style="font-size:36px;font-weight:800;color:#10B981;letter-spacing:-1px;margin-top:16px;line-height:1;">
+                        @_dash.OverallAttendancePercentage.ToString("F1")%
+                    </MudText>
+                    <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);margin-top:4px;">Attendance Rate</MudText>
+                </div>
+
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <div style="flex:1;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:10px;text-align:center;">
+                        <div style="font-size:11px;color:var(--mud-palette-text-secondary);margin-bottom:2px;">Present</div>
+                        <div style="font-size:15px;font-weight:700;color:#10B981;">@_attendanceData[0].ToString("F1")%</div>
+                    </div>
+                    <div style="flex:1;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:8px;padding:10px;text-align:center;">
+                        <div style="font-size:11px;color:var(--mud-palette-text-secondary);margin-bottom:2px;">Absent</div>
+                        <div style="font-size:15px;font-weight:700;color:#EF4444;">@_attendanceData[1].ToString("F1")%</div>
+                    </div>
+                </div>
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    <!-- ── Bottom Row ──────────────────────────────────────────────────── -->
+    <MudGrid Class="mb-4">
+
+        <!-- Upcoming Classes -->
+        <MudItem xs="12" md="6">
+            <div class="dash-panel">
+                <div class="dash-section-header">
+                    <div>
+                        <div class="dash-panel-title">Upcoming Classes</div>
+                        <div class="dash-panel-sub">Scheduled for today and tomorrow</div>
+                    </div>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.ArrowForward"
+                               Style="color:#6366F1;font-size:12px;padding:4px 8px;" Href="/admin/classes">
+                        View all
+                    </MudButton>
+                </div>
+
+                @if (_dash.UpcomingClasses?.Any() == true)
+                {
+                    @foreach (var cls in _dash.UpcomingClasses)
+                    {
+                        <div class="dash-list-row">
+                            <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:rgba(99,102,241,0.15);color:#6366F1;">
+                                @cls.ClassName[..1].ToUpper()
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;color:var(--mud-palette-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                    @cls.ClassName
+                                </div>
+                                <div style="font-size:11px;color:var(--mud-palette-text-secondary);margin-top:1px;">
+                                    @cls.TutorName · @cls.StartTime.ToString("HH:mm")
+                                    @if (!string.IsNullOrEmpty(cls.Room))
+                                    {
+                                        <span> · Rm @cls.Room</span>
+                                    }
+                                </div>
+                            </div>
+                            <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px;white-space:nowrap;background:rgba(59,130,246,0.12);color:#3B82F6;">
+                                @cls.EnrolledCount students
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0;">
+                        <MudIcon Icon="@Icons.Material.Filled.EventBusy" Style="color:var(--mud-palette-text-secondary);font-size:2.2rem;" />
+                        <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-secondary);margin-top:8px;">No upcoming classes</MudText>
+                    </div>
+                }
+            </div>
+        </MudItem>
+
+        <!-- Overdue Invoices -->
+        <MudItem xs="12" md="6">
+            <div class="dash-panel">
+                <div class="dash-section-header">
+                    <div>
+                        <div class="dash-panel-title">Overdue Invoices</div>
+                        <div class="dash-panel-sub">Students with outstanding payments</div>
+                    </div>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.ArrowForward"
+                               Style="color:#6366F1;font-size:12px;padding:4px 8px;" Href="/admin/finance">
+                        View all
+                    </MudButton>
+                </div>
+
+                @if (_dash.OverdueInvoices?.Any() == true)
+                {
+                    @foreach (var inv in _dash.OverdueInvoices.Take(6))
+                    {
+                        <div class="dash-list-row">
+                            <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:rgba(239,68,68,0.12);color:#EF4444;">
+                                @inv.StudentName[..1].ToUpper()
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;color:var(--mud-palette-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                    @inv.StudentName
+                                </div>
+                                <div style="font-size:11px;color:#EF4444;margin-top:1px;">
+                                    @inv.DaysOverdue days overdue
+                                </div>
+                            </div>
+                            <div style="font-size:13px;font-weight:700;color:#EF4444;white-space:nowrap;">
+                                ZMW @inv.BalanceAmount.ToString("N0")
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0;">
+                        <div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Style="color:#10B981;font-size:24px;" />
+                        </div>
+                        <MudText Typo="Typo.body2" Style="color:#10B981;font-weight:600;">All payments up to date</MudText>
+                        <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);margin-top:2px;">No overdue invoices</MudText>
+                    </div>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    <!-- ── Quick Actions ───────────────────────────────────────────────── -->
+    <div style="margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;color:var(--mud-palette-text-primary);margin-bottom:12px;">Quick Actions</div>
+        <MudGrid>
+            @foreach (var action in _quickActions)
+            {
+                <MudItem xs="6" sm="4" md="2">
+                    <a class="dash-quick-action" href="@action.Href">
+                        <div class="dash-quick-icon">
+                            <MudIcon Icon="@action.Icon" Style="color:#6366F1;font-size:18px;" />
+                        </div>
+                        <span style="font-size:13px;color:var(--mud-palette-text-primary);font-weight:500;">@action.Label</span>
+                    </a>
+                </MudItem>
+            }
+        </MudGrid>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _userName = string.Empty;
+    private string _greeting = "morning";
+    private string? _apiError = null;
+
+    private DashboardDto _dash = new();
+    private List<ChartSeries> _revenueSeries = new();
+    private string[] _monthLabels = Array.Empty<string>();
+    private double[] _attendanceData = new double[] { 0, 100 };
+    private string[] _attendanceLabels = new[] { "Present", "Absent" };
+
+    private readonly (string Label, string Icon, string Href)[] _quickActions = new[]
+    {
+        ("Add Student",    Icons.Material.Filled.PersonAdd,     "/admin/students/add"),
+        ("New Invoice",    Icons.Material.Filled.Receipt,        "/admin/finance/new"),
+        ("Schedule Class", Icons.Material.Filled.CalendarMonth, "/admin/classes/schedule"),
+        ("Add Tutor",      Icons.Material.Filled.School,         "/admin/tutors/add"),
+        ("Mark Attend.",   Icons.Material.Filled.HowToReg,       "/admin/attendance"),
+        ("Reports",        Icons.Material.Filled.BarChart,       "/admin/reports"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _greeting = DateTime.Now.Hour switch
+        {
+            < 12 => "morning",
+            < 17 => "afternoon",
+            _ => "evening"
+        };
+        await LoadDataAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _apiError = null;
+        StateHasChanged();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            await AuthProvider.AuthReady;
+
+            var user = await AuthProvider.GetCurrentUserAsync();
+            _userName = user?.FullName?.Split(' ').FirstOrDefault() ?? "User";
+
+            var endpoint = user?.Role switch
+            {
+                UserRole.Tutor => "api/dashboard/tutor",
+                UserRole.Student => "api/dashboard/student",
+                _ => "api/dashboard/admin"
+            };
+
+            var result = await Api.GetAsync<DashboardDto>(endpoint);
+
+            if (result.Success && result.Data is not null)
+            {
+                _dash = result.Data;
+                BuildCharts();
+            }
+            else
+            {
+                _apiError = result.Error ?? "Failed to load dashboard.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _apiError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BuildCharts()
+    {
+        var enrollments = _dash.MonthlyEnrollments ?? new();
+        if (enrollments.Any())
+        {
+            _monthLabels = enrollments.Select(m => m.MonthName).ToArray();
+            _revenueSeries = new List<ChartSeries>
+            {
+                new() { Name = "New Enrollments",
+                        Data = enrollments.Select(m => (double)m.NewEnrollments).ToArray() },
+                new() { Name = "Withdrawals",
+                        Data = enrollments.Select(m => (double)m.Withdrawals).ToArray() }
+            };
+        }
+        else
+        {
+            _monthLabels = new[] { "Jan","Feb","Mar","Apr","May","Jun",
+                                   "Jul","Aug","Sep","Oct","Nov","Dec" };
+            _revenueSeries = new List<ChartSeries>
+            {
+                new() { Name = "Enrollments", Data = new double[12] }
+            };
+        }
+
+        var pct = Math.Max(0, Math.Min(100, _dash.OverallAttendancePercentage));
+        _attendanceData = pct > 0 ? new[] { pct, 100 - pct } : new[] { 0.01, 99.99 };
+        _attendanceLabels = new[] { "Present / Late", "Absent" };
+    }
+}

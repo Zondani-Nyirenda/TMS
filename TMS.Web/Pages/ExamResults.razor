@@ -1,0 +1,284 @@
+﻿@page "/exams/results"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Course
+@using TMS.Application.DTOs.Exam
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@attribute [Authorize(Roles = "Admin,Tutor")]
+@inject ApiClient Api
+
+<PageTitle>Exam Results – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Exam Results</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">View and analyse student performance</MudText>
+    </div>
+</div>
+
+<!-- Exam selector -->
+<MudPaper Elevation="1" Class="pa-4 mb-4 rounded-xl">
+    <MudGrid>
+        <MudItem xs="12" sm="5">
+           <MudSelect T="Guid" Value="_classId" Label="Select Class" Variant="Variant.Outlined"
+           ValueChanged="@(async (Guid v) => { 
+               _classId = v; // Update the variable manually
+               _examId = Guid.Empty; 
+               _results.Clear(); 
+               await LoadExamsAsync(v); 
+           })">
+                <MudSelectItem Value="Guid.Empty">-- Choose a class --</MudSelectItem>
+                @foreach (var c in _classes)
+                {
+                    <MudSelectItem Value="@c.Id">@c.Name – @c.CourseName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="5">
+           <MudSelect T="Guid" Value="_examId" Label="Select Exam" Variant="Variant.Outlined"
+           Disabled="@(!_exams.Any())"
+           ValueChanged="@(async (Guid v) => { 
+               _examId = v; // Update the variable manually
+               await LoadResultsAsync(v); 
+           })">
+                <MudSelectItem Value="Guid.Empty">-- Choose an exam --</MudSelectItem>
+                @foreach (var e in _exams)
+                {
+                    <MudSelectItem Value="@e.Id">@e.Title (@e.ExamDate.ToString("dd MMM"))</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="2" Class="d-flex align-center">
+            @if (_examId != Guid.Empty)
+            {
+                <MudChip T="string" Color="@(_selectedExam?.IsPublished == true ? Color.Success : Color.Warning)"
+                         Size="Size.Small">
+                    @(_selectedExam?.IsPublished == true ? "Published" : "Unpublished")
+                </MudChip>
+            }
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_results.Any())
+{
+    <!-- Stats cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold">@_results.Count</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Total Students</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Success">
+                    @_results.Count(r => r.IsPassed)
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Passed</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Error">
+                    @_results.Count(r => !r.IsPassed)
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Failed</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Primary">
+                    @(_results.Any() ? _results.Average(r => (double)r.Percentage).ToString("F1") : "0")%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Class Average</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Grade distribution chart -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="5">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Grade Distribution</MudText>
+                <MudChart ChartType="ChartType.Donut"
+                          InputData="@_gradeData"
+                          InputLabels="@_gradeLabels"
+                          Width="100%" Height="200px" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Score Distribution</MudText>
+                <MudChart ChartType="ChartType.Bar"
+                          ChartSeries="@_scoreSeries"
+                          XAxisLabels="@_scoreLabels"
+                          Width="100%" Height="200px"
+                          ChartOptions="@(new ChartOptions { YAxisTicks = 4 })" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Results table -->
+    <MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+        <MudTable Items="@_results" Hover="true" Dense="false"
+                  SortLabel="Sort"
+                  Breakpoint="Breakpoint.Sm">
+            <ToolBarContent>
+                <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                    Individual Results
+                </MudText>
+                <MudSpacer />
+                <MudTextField @bind-Value="_resultSearch" Placeholder="Filter students…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortBy="new Func<ResultDto,object>(r=>r.StudentName)">Student</MudTableSortLabel></MudTh>
+                <MudTh>Student #</MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<ResultDto,object>(r=>r.MarksObtained)" InitialDirection="SortDirection.Descending">Marks</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<ResultDto,object>(r=>r.Percentage)">%</MudTableSortLabel></MudTh>
+                <MudTh>Grade</MudTh>
+                <MudTh>Result</MudTh>
+                <MudTh>Remarks</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <div class="d-flex align-center gap-2">
+                        <MudAvatar Color="@(context.IsPassed ? Color.Success : Color.Error)"
+                                   Size="Size.Small">
+                            @context.StudentName[..1]
+                        </MudAvatar>
+                        <MudText Typo="Typo.body2" Class="fw-semibold">@context.StudentName</MudText>
+                    </div>
+                </MudTd>
+                <MudTd><MudText Typo="Typo.caption">@context.StudentNumber</MudText></MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="fw-bold">
+                        @context.MarksObtained / @context.TotalMarks
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2"
+                             Color="@(context.Percentage >= 50 ? Color.Success : Color.Error)">
+                        @context.Percentage.ToString("F1")%
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudChip Size="Size.Small" T="string" Color="@GradeColor(context.Grade)" Label="true">
+                        @context.Grade
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    @if (context.IsPassed)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                 Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel"
+                                 Color="Color.Error" Size="Size.Small" />
+                    }
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @(context.Remarks ?? "–")
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+else if (_examId != Guid.Empty)
+{
+    <MudAlert Severity="Severity.Info">No results entered for this exam yet.</MudAlert>
+}
+else if (_classId != Guid.Empty && !_exams.Any())
+{
+    <MudAlert Severity="Severity.Warning">No exams found for this class.</MudAlert>
+}
+
+@code {
+    private List<ClassDto>  _classes = new();
+    private List<ExamDto>   _exams   = new();
+    private List<ResultDto> _results = new();
+    private Guid      _classId = Guid.Empty, _examId = Guid.Empty;
+    private ExamDto?  _selectedExam;
+    private bool      _loading = false;
+    private string    _resultSearch = string.Empty;
+
+    // Chart data
+    private double[]          _gradeData   = Array.Empty<double>();
+    private string[]          _gradeLabels = Array.Empty<string>();
+    private List<ChartSeries> _scoreSeries = new();
+    private string[]          _scoreLabels = Array.Empty<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Api.GetAsync<PagedResult<ClassDto>>("api/classes?pageSize=200");
+        _classes = r.Data?.Items.ToList() ?? new();
+    }
+
+    private async Task LoadExamsAsync(Guid classId)
+    {
+        if (classId == Guid.Empty) { _exams.Clear(); return; }
+        var r = await Api.GetAsync<PagedResult<ExamDto>>($"api/exams?classId={classId}&pageSize=100");
+        _exams = r.Data?.Items.ToList() ?? new();
+    }
+
+    private async Task LoadResultsAsync(Guid examId)
+    {
+        if (examId == Guid.Empty) return;
+        _loading = true;
+        _selectedExam = _exams.FirstOrDefault(e => e.Id == examId);
+        var r = await Api.GetAsync<List<ResultDto>>($"api/exams/{examId}/results");
+        _results = r.Data ?? new();
+        BuildCharts();
+        _loading = false;
+    }
+
+    private void BuildCharts()
+    {
+        // Grade distribution donut
+        var gradeGroups = _results
+            .GroupBy(r => r.Grade.ToString())
+            .OrderByDescending(g => g.Count())
+            .ToList();
+        _gradeData   = gradeGroups.Select(g => (double)g.Count()).ToArray();
+        _gradeLabels = gradeGroups.Select(g => g.Key).ToArray();
+
+        // Score distribution bar (buckets: 0-49, 50-59, 60-69, 70-79, 80-89, 90-100)
+        var buckets = new[] { "0–49", "50–59", "60–69", "70–79", "80–89", "90–100" };
+        var counts  = new double[]
+        {
+            _results.Count(r => r.Percentage < 50),
+            _results.Count(r => r.Percentage is >= 50 and < 60),
+            _results.Count(r => r.Percentage is >= 60 and < 70),
+            _results.Count(r => r.Percentage is >= 70 and < 80),
+            _results.Count(r => r.Percentage is >= 80 and < 90),
+            _results.Count(r => r.Percentage >= 90),
+        };
+        _scoreLabels = buckets;
+        _scoreSeries = new List<ChartSeries>
+        {
+            new() { Name = "Students", Data = counts }
+        };
+    }
+
+    private static Color GradeColor(GradeLevel g) => g switch
+    {
+        GradeLevel.APlus or GradeLevel.A or GradeLevel.AMinus => Color.Success,
+        GradeLevel.BPlus or GradeLevel.B or GradeLevel.BMinus => Color.Primary,
+        GradeLevel.CPlus or GradeLevel.C or GradeLevel.CMinus => Color.Info,
+        GradeLevel.D => Color.Warning,
+        _            => Color.Error
+    };
+}

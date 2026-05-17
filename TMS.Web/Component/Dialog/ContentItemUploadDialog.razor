@@ -1,0 +1,336 @@
+﻿@inject ApiClient Api
+@using TMS.Application.DTOs.Content
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Upload" Class="mr-2" />
+            Upload Resource
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="_moduleId" Label="Module" Variant="Variant.Outlined"
+                               Required="true" RequiredError="Select a module">
+                        @foreach (var m in Modules)
+                        {
+                            <MudSelectItem Value="@m.Id">@m.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect Value="_resourceType"
+                               ValueChanged="@((ResourceType t) => OnResourceTypeChanged(t))"
+                               T="ResourceType" Label="Resource Type" Variant="Variant.Outlined">
+                        @foreach (var t in Enum.GetValues<ResourceType>())
+                        {
+                            <MudSelectItem Value="@t">
+                                <div class="d-flex align-center gap-2">
+                                    <MudIcon Icon="@TypeIcon(t)" Size="Size.Small" />
+                                    @t
+                                </div>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_accessLevel" Label="Access Level"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="ResourceAccessLevel.AllStudents">All Enrolled Students</MudSelectItem>
+                        <MudSelectItem Value="ResourceAccessLevel.TutorsOnly">Tutors &amp; Admins Only</MudSelectItem>
+                        <MudSelectItem Value="ResourceAccessLevel.Restricted">Restricted (grant per student)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_title" Label="Title" Variant="Variant.Outlined"
+                                  Required="true" RequiredError="Title is required"
+                                  Placeholder="e.g. Lecture Slides Week 1" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_description" Label="Description (optional)"
+                                  Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_sortOrder" Label="Display Order"
+                                     Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" Class="d-flex align-center">
+                    <MudSwitch @bind-Value="_publishNow" Color="Color.Primary"
+                               Label="Publish immediately" />
+                </MudItem>
+
+                @if (_resourceType == ResourceType.Link)
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_externalUrl" Label="URL"
+                                      Variant="Variant.Outlined" Required="true"
+                                      InputType="InputType.Url"
+                                      Placeholder="https://example.com/resource"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Link" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2" Class="fw-bold mb-2">File *</MudText>
+
+                        @if (_fileBytes is null)
+                        {
+                            <div style="border:2px dashed var(--mud-palette-primary);
+                                border-radius:8px;padding:32px;text-align:center;
+                                cursor:pointer"
+                                 @onclick="TriggerFilePicker">
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
+                                         Color="Color.Primary" Style="font-size:3rem" />
+                                <MudText Typo="Typo.body2" Class="mt-2">
+                                    Click to browse a file
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                    @AcceptedTypes — max 500 MB
+                                </MudText>
+                            </div>
+
+                            <!-- Always in DOM so ref stays valid -->
+                            <InputFile id="fileInput"
+                                       OnChange="FileSelected"
+                                       accept="@AcceptedTypes"
+                                       style="display:none" />
+                        }
+                        else
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 rounded-lg d-flex align-center gap-3"
+                                      Style="border:1px solid var(--mud-palette-lines-default)">
+                                <MudIcon Icon="@TypeIcon(_resourceType)" Color="Color.Primary" />
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.body2" Class="fw-semibold">@_fileName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @FormatSize(_fileBytes.Length)
+                                    </MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               OnClick="ClearFile" />
+                            </MudPaper>
+                        }
+
+                        @if (_readingFile)
+                        {
+                            <MudProgressLinear Indeterminate="true" Color="Color.Secondary"
+                                               Class="mt-2" Rounded="true" />
+                            <MudText Typo="Typo.caption" Align="Align.Center">Reading file…</MudText>
+                        }
+                    </MudItem>
+                }
+
+            </MudGrid>
+        </MudForm>
+
+        @if (_uploading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary"
+                               Class="mt-4" Rounded="true" />
+            <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">
+                Uploading… please wait
+            </MudText>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())"
+                   Disabled="@(_uploading || _readingFile)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="UploadAsync"
+                   Disabled="@(_uploading || _readingFile || !CanSubmit)"
+                   StartIcon="@Icons.Material.Filled.Upload">
+            @(_uploading ? "Uploading…" : "Upload")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid CourseId { get; set; }
+    [Parameter] public List<ContentModuleDto> Modules { get; set; } = new();
+    [Parameter] public Guid? DefaultModuleId { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid = false, _uploading = false, _readingFile = false;
+
+    private Guid _moduleId = Guid.Empty;
+    private string _title = string.Empty;
+    private string _description = string.Empty;
+    private int _sortOrder = 0;
+    private bool _publishNow = true;
+    private ResourceType _resourceType = ResourceType.Document;
+    private ResourceAccessLevel _accessLevel = ResourceAccessLevel.AllStudents;
+    private string _externalUrl = string.Empty;
+
+    // Store raw bytes immediately on file selection — avoids _blazorFilesById null
+    private byte[]? _fileBytes;
+    private string _fileName = string.Empty;
+    private string _mimeType = string.Empty;
+
+    private bool CanSubmit =>
+        _moduleId != Guid.Empty &&
+        !string.IsNullOrWhiteSpace(_title) &&
+        (_resourceType == ResourceType.Link
+            ? !string.IsNullOrWhiteSpace(_externalUrl)
+            : _fileBytes is not null);
+
+    private string AcceptedTypes => _resourceType switch
+    {
+        ResourceType.Video => ".mp4,.mov,.avi,.mkv,.webm",
+        ResourceType.Audio => ".mp3,.wav,.ogg,.m4a",
+        ResourceType.Image => ".jpg,.jpeg,.png,.gif,.webp,.svg",
+        ResourceType.Document => ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt",
+        ResourceType.Archive => ".zip,.rar,.7z,.tar,.gz",
+        _ => "*"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (DefaultModuleId.HasValue) _moduleId = DefaultModuleId.Value;
+        else if (Modules.Any()) _moduleId = Modules[0].Id;
+    }
+
+    private void OnResourceTypeChanged(ResourceType t)
+    {
+        _resourceType = t;
+        ClearFile();
+    }
+
+    // Read ALL bytes immediately before any re-render can happen
+    private async Task FileSelected(InputFileChangeEventArgs e)
+    {
+        _readingFile = true;
+        StateHasChanged();
+
+        try
+        {
+            var file = e.File;
+            _fileName = file.Name;
+            _mimeType = string.IsNullOrEmpty(file.ContentType)
+                ? "application/octet-stream"
+                : file.ContentType;
+
+            using var stream = file.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _fileBytes = ms.ToArray();
+
+            if (string.IsNullOrWhiteSpace(_title))
+                _title = Path.GetFileNameWithoutExtension(file.Name);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not read file: {ex.Message}", Severity.Error);
+            ClearFile();
+        }
+        finally
+        {
+            _readingFile = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearFile()
+    {
+        _fileBytes = null;
+        _fileName = string.Empty;
+        _mimeType = string.Empty;
+    }
+
+    private async Task TriggerFilePicker()
+    {
+        await JS.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+    }
+
+    private async Task UploadAsync()
+    {
+        await _form.Validate();
+        if (!_valid || !CanSubmit) return;
+
+        _uploading = true;
+        StateHasChanged();
+
+        try
+        {
+            var requestJson = System.Text.Json.JsonSerializer.Serialize(
+                new CreateContentItemRequest
+                {
+                    ContentModuleId = _moduleId,
+                    Title = _title.Trim(),
+                    Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+                    SortOrder = _sortOrder,
+                    ResourceType = _resourceType,
+                    AccessLevel = _accessLevel,
+                    ExternalUrl = _resourceType == ResourceType.Link ? _externalUrl.Trim() : null,
+                    IsPublished = _publishNow
+                });
+
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(requestJson), "requestJson");
+
+            // Use pre-read bytes — no IBrowserFile reference needed here
+            if (_fileBytes is not null && _resourceType != ResourceType.Link)
+            {
+                var fileContent = new ByteArrayContent(_fileBytes);
+                fileContent.Headers.ContentType =
+                    new System.Net.Http.Headers.MediaTypeHeaderValue(_mimeType);
+                content.Add(fileContent, "file", _fileName);
+            }
+
+            var result = await Api.PostMultipartAsync<ContentItemDto>(
+                "api/content/items", content);
+
+            if (result.Success)
+                MudDialog.Close(DialogResult.Ok(result.Data));
+            else
+                Snackbar.Add(result.Error ?? "Upload failed.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Upload error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string TypeIcon(ResourceType t) => t switch
+    {
+        ResourceType.Video => Icons.Material.Filled.PlayCircle,
+        ResourceType.Audio => Icons.Material.Filled.Audiotrack,
+        ResourceType.Image => Icons.Material.Filled.Image,
+        ResourceType.Link => Icons.Material.Filled.Link,
+        ResourceType.Archive => Icons.Material.Filled.FolderZip,
+        _ => Icons.Material.Filled.Description
+    };
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB"
+    };
+}

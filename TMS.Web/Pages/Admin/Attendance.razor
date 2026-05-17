@@ -1,0 +1,275 @@
+﻿@page "/attendance"
+@* @attribute [Authorize(Roles = "Admin,Tutor")] *@
+
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Web.Services
+
+<PageTitle>Attendance – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Attendance</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Record and manage class attendance
+        </MudText>
+    </div>
+    @if (_attendanceList.Any())
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="SubmitAsync"
+                   Disabled="_submitting">
+            @(_submitting ? "Saving…" : "Save Attendance")
+        </MudButton>
+    }
+</div>
+
+<!-- Filters -->
+<MudPaper Elevation="1" Class="pa-4 mb-4 rounded-xl">
+    <MudGrid>
+        <MudItem xs="12" sm="5">
+            <MudSelect @bind-Value="_selectedClassId"
+                       Label="Select Class"
+                       Variant="Variant.Outlined">
+                <MudSelectItem Value="Guid.Empty">-- Choose a class --</MudSelectItem>
+                @foreach (var c in _classes)
+                {
+                    <MudSelectItem Value="@c.Id">
+                        @c.Name – @c.CourseName (@c.DayOfWeek @c.StartTime.ToString("HH:mm"))
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudDatePicker @bind-Date="_selectedDate"
+                           Label="Date"
+                           Variant="Variant.Outlined"
+                           MaxDate="DateTime.Today"
+                           Editable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="3" Class="d-flex align-center">
+            @if (_selectedClassId != Guid.Empty)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="LoadAttendanceAsync"
+                           FullWidth="true">
+                    Load
+                </MudButton>
+            }
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_attendanceList.Any())
+{
+    <!-- Quick mark all -->
+    <MudPaper Elevation="1" Class="pa-3 mb-3 rounded-xl">
+        <div class="d-flex align-center gap-3 flex-wrap">
+            <MudText Typo="Typo.body2" Class="fw-bold">Mark All:</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Filled"
+                       Color="Color.Success" OnClick="@(() => MarkAll(TMS.Domain.Enums.AttendanceStatus.Present))">
+                All Present
+            </MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                       Color="Color.Error" OnClick="@(() => MarkAll(TMS.Domain.Enums.AttendanceStatus.Absent))">
+                All Absent
+            </MudButton>
+            <MudSpacer />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @_attendanceList.Count(a => a.Status == TMS.Domain.Enums.AttendanceStatus.Present) present ·
+                @_attendanceList.Count(a => a.Status == TMS.Domain.Enums.AttendanceStatus.Absent) absent ·
+                @_attendanceList.Count(a => a.Status == TMS.Domain.Enums.AttendanceStatus.Late) late
+            </MudText>
+        </div>
+    </MudPaper>
+
+    <!-- Attendance grid -->
+    <MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+        <MudTable Items="@_attendanceList" Hover="true" Dense="false">
+            <HeaderContent>
+                <MudTh>Student</MudTh>
+                <MudTh>Student #</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Arrival Time</MudTh>
+                <MudTh>Remarks</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="row">
+                <MudTd>
+                    <div class="d-flex align-center gap-2">
+                        <MudAvatar Color="Color.Secondary" Size="Size.Small">
+                            @(row.StudentName?.Length > 0 ? row.StudentName[..1] : "?")
+                        </MudAvatar>
+                        @row.StudentName
+                    </div>
+                </MudTd>
+                <MudTd>
+                    <MudChip Size="Size.Small" T="string">@row.StudentNumber</MudChip>
+                </MudTd>
+                <MudTd>
+                    <MudSelect @bind-Value="row.Status"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Style="min-width:140px">
+                        <MudSelectItem Value="TMS.Domain.Enums.AttendanceStatus.Present">
+                            <MudChip Color="Color.Success" T="string" Size="Size.Small">Present</MudChip>
+                        </MudSelectItem>
+                        <MudSelectItem Value="TMS.Domain.Enums.AttendanceStatus.Absent">
+                            <MudChip Color="Color.Error" T="string" Size="Size.Small">Absent</MudChip>
+                        </MudSelectItem>
+                        <MudSelectItem Value="TMS.Domain.Enums.AttendanceStatus.Late">
+                            <MudChip Color="Color.Warning" T="string" Size="Size.Small">Late</MudChip>
+                        </MudSelectItem>
+                        <MudSelectItem Value="TMS.Domain.Enums.AttendanceStatus.Excused">
+                            <MudChip Color="Color.Info" T="string" Size="Size.Small">Excused</MudChip>
+                        </MudSelectItem>
+                    </MudSelect>
+                </MudTd>
+                <MudTd>
+                    @if (row.Status == TMS.Domain.Enums.AttendanceStatus.Late)
+                    {
+                        <MudTimePicker @bind-Time="_lateTimes[row.StudentId]"
+                                       Variant="Variant.Outlined"
+                                       Dense="true"
+                                       AmPm="false" />
+                    }
+                </MudTd>
+                <MudTd>
+                    <MudTextField @bind-Value="row.Remarks"
+                                  Placeholder="Optional remark"
+                                  Variant="Variant.Text"
+                                  Dense="true" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+else if (_selectedClassId != Guid.Empty && !_loadingAttendance)
+{
+    <MudAlert Severity="Severity.Info">
+        No students enrolled in this class, or no data for this date.
+    </MudAlert>
+}
+
+@code {
+    // Local row model
+    private class AttendanceRow
+    {
+        public Guid StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
+        public string StudentNumber { get; set; } = string.Empty;
+        public TMS.Domain.Enums.AttendanceStatus Status { get; set; } = TMS.Domain.Enums.AttendanceStatus.Present;
+        public string? Remarks { get; set; }
+    }
+
+    private List<TMS.Application.DTOs.Course.ClassDto> _classes = new();
+    private List<AttendanceRow> _attendanceList = new();
+    private Dictionary<Guid, TimeSpan?> _lateTimes = new();
+    private Guid _selectedClassId = Guid.Empty;
+    private DateTime? _selectedDate = DateTime.Today;
+    private bool _loadingAttendance = false;
+    private bool _submitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAsync<TMS.Application.Common.PagedResult<
+            TMS.Application.DTOs.Course.ClassDto>>("api/classes?pageSize=100");
+        if (result.Success && result.Data is not null)
+            _classes = result.Data.Items.ToList();
+    }
+
+    private async Task OnClassChanged(Guid classId)
+    {
+        _selectedClassId = classId;
+        if (classId != Guid.Empty)
+            await LoadAttendanceAsync();
+    }
+
+    private async Task OnDateChanged(DateTime? date)
+    {
+        _selectedDate = date;
+        if (_selectedClassId != Guid.Empty)
+            await LoadAttendanceAsync();
+    }
+
+    private async Task LoadAttendanceAsync()
+    {
+        if (_selectedClassId == Guid.Empty) return;
+        _loadingAttendance = true;
+        _attendanceList.Clear();
+        _lateTimes.Clear();
+
+        // Load enrolled students
+        var studentsResult = await Api.GetAsync<List<TMS.Application.DTOs.Student.StudentSummaryDto>>(
+            $"api/classes/{_selectedClassId}/students");
+
+        // Load existing attendance
+        var dateStr = (_selectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+        var attResult = await Api.GetAsync<List<TMS.Application.DTOs.Attendance.AttendanceDto>>(
+            $"api/attendance/class/{_selectedClassId}?date={dateStr}");
+
+        if (studentsResult.Success && studentsResult.Data is not null)
+        {
+            foreach (var student in studentsResult.Data)
+            {
+                var existing = attResult.Success && attResult.Data != null
+                    ? attResult.Data.FirstOrDefault(a => a.StudentId == student.Id)
+                    : null;
+
+                _attendanceList.Add(new AttendanceRow
+                {
+                    StudentId = student.Id,
+                    StudentName = student.FullName,
+                    StudentNumber = student.StudentNumber,
+                    Status = existing?.Status ?? TMS.Domain.Enums.AttendanceStatus.Present,
+                    Remarks = existing?.Remarks
+                });
+
+                _lateTimes[student.Id] = null;
+            }
+        }
+        _loadingAttendance = false;
+    }
+
+    private void MarkAll(TMS.Domain.Enums.AttendanceStatus status)
+    {
+        foreach (var row in _attendanceList)
+            row.Status = status;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_selectedClassId == Guid.Empty || !_attendanceList.Any()) return;
+
+        _submitting = true;
+
+        var request = new TMS.Application.DTOs.Attendance.SubmitAttendanceRequest
+        {
+            ClassId = _selectedClassId,
+            Date = _selectedDate ?? DateTime.Today,
+            Entries = _attendanceList.Select(row =>
+                new TMS.Application.DTOs.Attendance.StudentAttendanceEntry
+                {
+                    StudentId = row.StudentId,
+                    Status = row.Status,
+                    ArrivalTime = _lateTimes.TryGetValue(row.StudentId, out var t) && t.HasValue
+                                    ? TimeOnly.FromTimeSpan(t.Value) : null,
+                    Remarks = row.Remarks
+                }).ToList()
+        };
+
+        var result = await Api.PostAsync<bool>("api/attendance", request);
+
+        Snackbar.Add(
+            result.Success
+                ? $"Attendance saved for {_attendanceList.Count} students."
+                : result.Error ?? "Failed to save attendance.",
+            result.Success ? Severity.Success : Severity.Error);
+
+        _submitting = false;
+    }
+}

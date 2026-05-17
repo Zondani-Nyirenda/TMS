@@ -1,0 +1,366 @@
+﻿@page "/study-material"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Content
+@using TMS.Application.DTOs.Course
+@using TMS.Domain.Enums
+@using TMS.Web.Auth
+@using TMS.Web.Services
+@using TMS.Web.Component.Dialog
+@attribute [Authorize]
+@inject ApiClient Api
+@inject TmsAuthStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Study Materials – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Study Materials</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Course notes, lecture videos, past papers and resources
+        </MudText>
+    </div>
+    <AuthorizeView Roles="Admin,Tutor">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Upload"
+                   OnClick="@(() => OpenUploadDialog(null))"
+                   Disabled="@(SelectedCourseId == Guid.Empty)">
+            Upload Resource
+        </MudButton>
+    </AuthorizeView>
+</div>
+
+<MudPaper Elevation="1" Class="pa-4 mb-4 rounded-xl">
+    <MudGrid AlignItems="AlignItems.Center">
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect @bind-Value="SelectedCourseId"
+                       Label="Select Course"
+                       Variant="Variant.Outlined"
+                       Adornment="Adornment.Start"
+                       AdornmentIcon="@Icons.Material.Filled.LibraryBooks">
+                <MudSelectItem Value="Guid.Empty">— Choose a course —</MudSelectItem>
+                @foreach (var c in _courses)
+                {
+                    <MudSelectItem Value="@c.Id">@c.Name (@c.Code)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        @if (_courseContent is not null)
+        {
+            <MudItem xs="12" sm="6" md="8">
+                <div class="d-flex align-center gap-4 flex-wrap">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Progress</MudText>
+                        <MudText Typo="Typo.body2" Class="fw-bold">
+                            @_courseContent.CompletedItems / @_courseContent.TotalItems items
+                        </MudText>
+                    </div>
+                    <div style="flex:1;min-width:150px">
+                        <MudProgressLinear Value="@_courseContent.CompletionPct"
+                                           Color="Color.Success" Rounded="true" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.body2" Class="fw-bold" Color="Color.Success">
+                        @_courseContent.CompletionPct.ToString("F0")%
+                    </MudText>
+                </div>
+            </MudItem>
+        }
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    @for (int i = 0; i < 3; i++)
+    {
+        <MudPaper Elevation="1" Class="mb-3 rounded-xl pa-4">
+            <MudSkeleton Width="40%" Height="24px" Class="mb-3" />
+            <MudSkeleton Width="100%" Height="16px" Class="mb-2" />
+            <MudSkeleton Width="80%" Height="16px" />
+        </MudPaper>
+    }
+}
+else if (SelectedCourseId == Guid.Empty)
+{
+    <div class="d-flex flex-column align-center pa-12">
+        <MudIcon Icon="@Icons.Material.Filled.MenuBook" Style="font-size:5rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">Select a course to view its materials</MudText>
+    </div>
+}
+else if (_courseContent is not null && !_courseContent.Modules.Any())
+{
+    <div class="d-flex flex-column align-center pa-12">
+        <MudIcon Icon="@Icons.Material.Filled.FolderOpen" Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">No content modules yet</MudText>
+        <AuthorizeView Roles="Admin,Tutor">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddModuleDialog">
+                Add First Module
+            </MudButton>
+        </AuthorizeView>
+    </div>
+}
+else if (_courseContent is not null)
+{
+    <AuthorizeView Roles="Admin,Tutor">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Add" Class="mb-4"
+                   OnClick="OpenAddModuleDialog">
+            Add Module
+        </MudButton>
+    </AuthorizeView>
+
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var module in _courseContent.Modules.OrderBy(m => m.SortOrder))
+        {
+            <MudExpansionPanel Class="mb-2 rounded-xl" @key="module.Id"
+                               IsInitiallyExpanded="@(_courseContent.Modules.Count == 1)">
+                <TitleContent>
+                    <div class="d-flex align-center justify-space-between w-100 pr-2">
+                        <div class="d-flex align-center gap-3">
+                            <MudAvatar Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                                @(module.SortOrder + 1)
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.subtitle2" Class="fw-bold">@module.Title</MudText>
+                                @if (!string.IsNullOrEmpty(module.Description))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@module.Description</MudText>
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex align-center gap-3">
+                            <div class="d-flex align-center gap-2" style="min-width:140px">
+                                <MudProgressLinear Value="@module.CompletionPct" Color="Color.Success"
+                                                   Rounded="true" Size="Size.Small" Style="flex:1" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @module.CompletedItems/@module.Items.Count
+                                </MudText>
+                            </div>
+                            <MudChip Size="Size.Small" T="string"
+                                     Color="@(module.Status == ContentModuleStatus.Published ? Color.Success : Color.Default)">
+                                @module.Status
+                            </MudChip>
+                            <AuthorizeView Roles="Admin,Tutor">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true"
+                                         @onclick:stopPropagation="true">
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Upload"
+                                                 OnClick="@(() => OpenUploadDialog(module.Id))">
+                                        Upload to this module
+                                    </MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit"
+                                                 OnClick="@(() => OpenEditModuleDialog(module))">
+                                        Edit module
+                                    </MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                                                 OnClick="@(() => DeleteModuleAsync(module))">
+                                        Delete module
+                                    </MudMenuItem>
+                                </MudMenu>
+                            </AuthorizeView>
+                        </div>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    @if (!module.Items.Any())
+                    {
+                        <MudText Color="Color.Secondary" Class="pa-4">No resources in this module yet.</MudText>
+                    }
+                    else
+                    {
+                        <MudList Dense="true" DisablePadding="true" T="string">
+                            @foreach (var item in module.Items.OrderBy(i => i.SortOrder))
+                            {
+                                <ContentItemRow Item="@item"
+                                                OnMarkComplete="@(async () => await MarkCompleteAsync(item))"
+                                                OnDownload="@(async () => await DownloadAsync(item))"
+                                                OnDelete="@(async () => await DeleteItemAsync(item))"
+                                                IsStaff="@_isStaff" />
+                            }
+                        </MudList>
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    private bool _loading = false;
+    private bool _isStaff = false;
+    private List<CourseDto> _courses = new();
+    private CourseContentDto? _courseContent;
+
+    private Guid _selectedCourseId = Guid.Empty;
+
+    private Guid SelectedCourseId
+    {
+        get => _selectedCourseId;
+        set
+        {
+            if (_selectedCourseId != value)
+            {
+                _selectedCourseId = value;
+                _ = OnCourseSelectedChanged(value);
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await AuthProvider.GetCurrentUserAsync();
+        _isStaff = user?.Role is UserRole.Admin or UserRole.Tutor;
+
+        var r = await Api.GetAsync<PagedResult<CourseDto>>("api/courses?pageSize=200");
+        _courses = r.Data?.Items.ToList() ?? new();
+    }
+
+    private async Task OnCourseSelectedChanged(Guid id)
+    {
+        _courseContent = null;
+        await InvokeAsync(StateHasChanged);
+
+        if (id != Guid.Empty)
+            await LoadContentAsync();
+    }
+
+    private async Task LoadContentAsync()
+    {
+        _loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        var r = await Api.GetAsync<CourseContentDto>($"api/content/courses/{_selectedCourseId}");
+
+        _loading = false;
+        _courseContent = r.Data;
+
+        if (!r.Success)
+            Snackbar.Add(r.Error ?? "Failed to load content.", Severity.Error);
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MarkCompleteAsync(ContentItemSummaryDto item)
+    {
+        var r = await Api.PostAsync<bool>($"api/content/items/{item.Id}/progress",
+            new { contentItemId = item.Id, isCompleted = !item.IsCompleted });
+        if (r.Success)
+        {
+            item.IsCompleted = !item.IsCompleted;
+            if (_courseContent is not null)
+                _courseContent.CompletedItems = _courseContent.Modules.Sum(m => m.Items.Count(i => i.IsCompleted));
+            Snackbar.Add(item.IsCompleted ? "Marked as complete!" : "Marked as incomplete.", Severity.Success);
+            await InvokeAsync(StateHasChanged);
+        }
+        else Snackbar.Add(r.Error ?? "Error.", Severity.Error);
+    }
+
+    private async Task DownloadAsync(ContentItemSummaryDto item)
+    {
+        var r = await Api.GetAsync<DownloadUrlResponse>($"api/content/items/{item.Id}/download");
+        if (!r.Success || string.IsNullOrEmpty(r.Data?.Url))
+        {
+            Snackbar.Add(r.Error ?? "Could not get download link.", Severity.Error);
+            return;
+        }
+
+        var token = await AuthProvider.GetTokenAsync();
+        await JS.InvokeVoidAsync("downloadFileFromStream", r.Data.Url, token, item.Title);
+    }
+
+    private async Task OpenAddModuleDialog()
+    {
+        var p = new DialogParameters
+        {
+            ["CourseId"] = _selectedCourseId,
+            ["Module"]   = (ContentModuleDto?)null
+        };
+        var d = await DialogService.ShowAsync<ContentModuleDialog>("Add Module", p,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await d.Result;
+        if (!result.Canceled)
+            await LoadContentAsync();
+    }
+
+    private async Task OpenEditModuleDialog(ContentModuleWithItemsDto m)
+    {
+        var dto = new ContentModuleDto
+        {
+            Id          = m.Id,
+            CourseId    = _selectedCourseId,
+            Title       = m.Title,
+            Description = m.Description,
+            SortOrder   = m.SortOrder,
+            Status      = m.Status
+        };
+        var p = new DialogParameters
+        {
+            ["CourseId"] = _selectedCourseId,
+            ["Module"]   = dto
+        };
+        var d = await DialogService.ShowAsync<ContentModuleDialog>("Edit Module", p,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await d.Result;
+        if (!result.Canceled)
+            await LoadContentAsync();
+    }
+
+    private async Task DeleteModuleAsync(ContentModuleWithItemsDto m)
+    {
+        var ok = await DialogService.ShowMessageBox("Delete Module",
+            $"Delete '{m.Title}' and all {m.Items.Count} item(s)? Cannot be undone.",
+            yesText: "Delete", noText: "Cancel");
+        if (ok != true) return;
+        var r = await Api.DeleteAsync($"api/content/modules/{m.Id}");
+        if (r.Success)
+        {
+            Snackbar.Add("Module deleted.", Severity.Success);
+            await LoadContentAsync();
+        }
+        else Snackbar.Add(r.Error ?? "Delete failed.", Severity.Error);
+    }
+
+    private async Task OpenUploadDialog(Guid? moduleId)
+    {
+        if (_selectedCourseId == Guid.Empty) return;
+        var modules = _courseContent?.Modules.Select(m => new ContentModuleDto
+        {
+            Id       = m.Id,
+            Title    = m.Title,
+            CourseId = _selectedCourseId
+        }).ToList() ?? new();
+
+        var p = new DialogParameters
+        {
+            ["CourseId"]        = _selectedCourseId,
+            ["Modules"]         = modules,
+            ["DefaultModuleId"] = moduleId
+        };
+        var d = await DialogService.ShowAsync<ContentItemUploadDialog>("Upload Resource", p,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await d.Result;
+        if (!result.Canceled)
+            await LoadContentAsync();
+    }
+
+    private async Task DeleteItemAsync(ContentItemSummaryDto item)
+    {
+        var ok = await DialogService.ShowMessageBox("Delete Resource",
+            $"Delete '{item.Title}'? The file will be permanently removed.",
+            yesText: "Delete", noText: "Cancel");
+        if (ok != true) return;
+        var r = await Api.DeleteAsync($"api/content/items/{item.Id}");
+        if (r.Success)
+        {
+            Snackbar.Add("Deleted.", Severity.Success);
+            await LoadContentAsync();
+        }
+        else Snackbar.Add(r.Error ?? "Delete failed.", Severity.Error);
+    }
+
+    private record DownloadUrlResponse(string Url);
+}

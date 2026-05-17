@@ -1,0 +1,401 @@
+﻿@page "/login"
+@layout EmptyLayout
+@inject TmsAuthStateProvider AuthProvider
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.DTOs.Auth
+@using TMS.Web.Auth
+@using TMS.Web.Services
+
+<style>
+    .login-root {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        background: #0A0C10;
+    }
+
+    @@media (max-width: 960px) {
+        .login-root {
+            grid-template-columns: 1fr;
+        }
+
+        .login-brand-panel {
+            display: none !important;
+        }
+    }
+
+    .login-brand-panel {
+        position: relative;
+        background: #0F1117;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 48px;
+        overflow: hidden;
+        border-right: 1px solid #1E2130;
+    }
+
+    .login-brand-grid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+
+    .login-brand-glow {
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+
+    .login-brand-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .login-brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .login-brand-logo-icon {
+        width: 42px;
+        height: 42px;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .login-brand-tagline {
+        position: relative;
+        z-index: 1;
+    }
+
+    .login-brand-stats {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 40px;
+    }
+
+    .login-stat-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid #1E2130;
+        border-radius: 12px;
+        padding: 20px;
+    }
+
+    .login-form-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 24px;
+        background: #0A0C10;
+    }
+
+    .login-form-box {
+        width: 100%;
+        max-width: 480px;
+    }
+
+    .login-form-header {
+        margin-bottom: 40px;
+        text-align: center;
+    }
+
+    .login-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 24px 0;
+    }
+
+        .login-divider hr {
+            flex: 1;
+            border: none;
+            border-top: 1px solid #1E2130;
+        }
+
+    .login-field-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #9CA3AF;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .tms-input-field {
+        --mud-input-outlined-border: #1E2130;
+        --mud-input-outlined-hover-border: #6366F1;
+    }
+
+    .login-submit-btn {
+        background: linear-gradient(135deg, #6366F1, #7C3AED) !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.3px !important;
+        height: 52px !important;
+        font-size: 15px !important;
+        transition: opacity 0.2s ease !important;
+    }
+
+        .login-submit-btn:hover {
+            opacity: 0.9 !important;
+        }
+
+    .login-feature-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid #1E2130;
+    }
+
+    .login-feature-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #6366F1;
+        flex-shrink: 0;
+    }
+</style>
+
+<div class="login-root">
+
+    <!-- ── Brand / Left Panel ───────────────────────────── -->
+    <div class="login-brand-panel">
+        <div class="login-brand-grid"></div>
+        <div class="login-brand-glow"></div>
+
+        <!-- Logo -->
+        <div class="login-brand-content login-brand-logo">
+            <div class="login-brand-logo-icon">
+                <MudIcon Icon="@Icons.Material.Filled.School" Style="color:#fff;font-size:22px;" />
+            </div>
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:800;color:#F9FAFB;letter-spacing:-0.3px;line-height:1;">TMS</MudText>
+                <MudText Typo="Typo.caption" Style="color:#6B7280;">Tuition Management</MudText>
+            </div>
+        </div>
+
+        <!-- Tagline -->
+        <div class="login-brand-content login-brand-tagline">
+            <MudText Typo="Typo.h4" Style="color:#F9FAFB;font-weight:800;line-height:1.2;letter-spacing:-0.8px;margin-bottom:16px;">
+                Everything your<br />
+                <span style="background:linear-gradient(90deg,#6366F1,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                    tuition centre
+                </span><br />
+                needs.
+            </MudText>
+            <MudText Typo="Typo.body2" Style="color:#6B7280;line-height:1.7;max-width:340px;">
+                Manage students, tutors, classes, attendance, fees and exams — all in one beautifully designed platform.
+            </MudText>
+
+            <div style="margin-top:32px;">
+                @foreach (var feat in _features)
+                {
+                    <div class="login-feature-item">
+                        <div class="login-feature-dot"></div>
+                        <MudText Typo="Typo.body2" Style="color:#9CA3AF;">@feat</MudText>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="login-brand-content">
+            <div class="login-brand-stats">
+                @foreach (var stat in _stats)
+                {
+                    <div class="login-stat-card">
+                        <MudText Typo="Typo.h5" Style="color:#F9FAFB;font-weight:800;letter-spacing:-0.5px;">@stat.Value</MudText>
+                        <MudText Typo="Typo.caption" Style="color:#6B7280;margin-top:2px;display:block;">@stat.Label</MudText>
+                    </div>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Style="color:#374151;margin-top:24px;display:block;">
+                © @DateTime.Now.Year Tuition Management System
+            </MudText>
+        </div>
+    </div>
+
+    <!-- ── Form / Right Panel ───────────────────────────── -->
+    <div class="login-form-panel">
+        <div class="login-form-box">
+
+            <!-- Mobile logo (hidden on desktop) -->
+            <div class="d-flex d-md-none align-center justify-center gap-2 mb-8">
+                <div class="login-brand-logo-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.School" Style="color:#fff;font-size:18px;" />
+                </div>
+                <MudText Typo="Typo.h6" Style="color:#F9FAFB;font-weight:800;">TMS Portal</MudText>
+            </div>
+
+            <!-- Header -->
+            <div class="login-form-header">
+                <MudText Typo="Typo.h5" Style="color:#F9FAFB;font-weight:800;letter-spacing:-0.5px;margin-bottom:8px;">
+                    Welcome back
+                </MudText>
+                <MudText Typo="Typo.body2" Style="color:#6B7280;">
+                    Sign in to your TMS account to continue
+                </MudText>
+            </div>
+
+            <!-- Form -->
+            <MudForm @ref="_form" @bind-IsValid="_formValid">
+
+                <div class="mb-4">
+                    <span class="login-field-label">Email address</span>
+                    <MudTextField @bind-Value="_model.Email"
+                                  Placeholder="you@school.com"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Email"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.AlternateEmail"
+                                  Required="true"
+                                  FullWidth="true"
+                                  Class="tms-input-field" />
+                </div>
+
+                <div class="mb-6">
+                    <div class="d-flex justify-space-between align-center mb-1">
+                        <span class="login-field-label" style="margin-bottom:0;">Password</span>
+                        <MudLink Href="#" Typo="Typo.caption" Color="Color.Primary">Forgot password?</MudLink>
+                    </div>
+                    <MudTextField @bind-Value="_model.Password"
+                                  Placeholder="••••••••"
+                                  Variant="Variant.Outlined"
+                                  InputType="@(_showPassword? InputType.Text: InputType.Password)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPassword? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                  Required="true"
+                                  FullWidth="true"
+                                  Class="tms-input-field" />
+                </div>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           OnClick="LoginAsync"
+                           Disabled="_loading"
+                           Class="login-submit-btn">
+                    @if (_loading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Login" Class="mr-2" Style="font-size:18px;" />
+                        <span>Sign in to TMS</span>
+                    }
+                </MudButton>
+            </MudForm>
+
+            <!-- Error -->
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true"
+                          Style="border-radius:10px;border:1px solid rgba(239,68,68,0.3);">
+                    @_error
+                </MudAlert>
+            }
+
+            <!-- Divider -->
+            <div class="login-divider">
+                <hr />
+                <MudText Typo="Typo.caption" Style="color:#4B5563;white-space:nowrap;">New to TMS?</MudText>
+                <hr />
+            </div>
+
+            <!-- Register link -->
+            <MudButton Variant="Variant.Outlined"
+                       FullWidth="true"
+                       Href="/register"
+                       Style="border-radius:10px;height:48px;border-color:#1E2130;color:#9CA3AF;font-weight:500;">
+                Create an account
+            </MudButton>
+
+            <MudText Typo="Typo.caption" Align="Align.Center" Style="color:#374151;margin-top:32px;display:block;">
+                By signing in you agree to our
+                <MudLink Href="#" Typo="Typo.caption" Color="Color.Primary">Terms</MudLink> and
+                <MudLink Href="#" Typo="Typo.caption" Color="Color.Primary">Privacy Policy</MudLink>
+            </MudText>
+        </div>
+    </div>
+</div>
+
+@code {
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _loading;
+    private bool _showPassword;
+    private string _error = string.Empty;
+
+    private readonly LoginRequest _model = new();
+
+    private readonly string[] _features = new[]
+    {
+        "Student & tutor management",
+        "Automated fee invoicing & payments",
+        "Attendance tracking & reporting",
+        "Class scheduling & timetables",
+        "Exam results & progress tracking",
+    };
+
+    private readonly (string Value, string Label)[] _stats = new[]
+    {
+        ("500+", "Students enrolled"),
+        ("98%", "Attendance rate"),
+        ("ZMW 2M+", "Fees processed"),
+        ("40+", "Active classes"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            Nav.NavigateTo("/");
+    }
+
+    private async Task LoginAsync()
+    {
+        await _form.Validate();
+        if (!_formValid) return;
+
+        _loading = true;
+        _error = string.Empty;
+
+        var result = await Api.PostAsync<LoginResponse>("api/auth/login", _model);
+
+        if (result.Success && result.Data is not null)
+        {
+            await AuthProvider.LoginAsync(result.Data);
+            Snackbar.Add("Welcome back!", Severity.Success);
+            Nav.NavigateTo("/admin/dashboard");
+        }
+        else
+        {
+            _error = result.Error ?? "Invalid email or password.";
+        }
+
+        _loading = false;
+    }
+}

@@ -1,0 +1,135 @@
+﻿@page "/tutors/new"
+@page "/tutors/{Id:guid}/edit"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.DTOs.Tutor
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Add Tutor" : "Edit Tutor") – TMS</PageTitle>
+
+<MudBreadcrumbs Items="_crumbs" Class="mb-4 px-0" />
+<MudText Typo="Typo.h5" Class="fw-bold mb-6">@(_isNew ? "Add New Tutor" : "Edit Tutor")</MudText>
+
+<MudForm @ref="_form" @bind-IsValid="_valid">
+    <MudGrid>
+        <!-- Personal -->
+        <MudItem xs="12"><MudText Typo="Typo.subtitle1" Class="fw-bold">Personal Information</MudText><MudDivider Class="mb-3 mt-1" /></MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.FirstName" Label="First Name" Variant="Variant.Outlined" Required="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.LastName" Label="Last Name" Variant="Variant.Outlined" Required="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.Email" Label="Email" Variant="Variant.Outlined" InputType="InputType.Email" Required="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.PhoneNumber" Label="Phone Number" Variant="Variant.Outlined" Required="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudDatePicker @bind-Date="_dob" Label="Date of Birth" Variant="Variant.Outlined" Editable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect @bind-Value="_req.Gender" Label="Gender" Variant="Variant.Outlined">
+                @foreach (var g in Enum.GetValues<Gender>())
+                { <MudSelectItem Value="@g">@g</MudSelectItem> }
+            </MudSelect>
+        </MudItem>
+
+        <!-- Professional -->
+        <MudItem xs="12" Class="mt-4"><MudText Typo="Typo.subtitle1" Class="fw-bold">Professional Details</MudText><MudDivider Class="mb-3 mt-1" /></MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.Qualification" Label="Qualification" Variant="Variant.Outlined" Required="true" Placeholder="e.g. BSc Mathematics" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_req.Specialization" Label="Specialization" Variant="Variant.Outlined" Required="true" Placeholder="e.g. Mathematics, Physics" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_req.Bio" Label="Biography" Variant="Variant.Outlined" Lines="3" Placeholder="Brief professional bio…" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_req.AvailabilityNotes" Label="Availability Notes" Variant="Variant.Outlined" Placeholder="e.g. Mon–Fri 08:00–16:00" />
+        </MudItem>
+
+        <!-- Login (create only) -->
+        @if (_isNew)
+        {
+            <MudItem xs="12" Class="mt-4"><MudText Typo="Typo.subtitle1" Class="fw-bold">Login Account</MudText><MudDivider Class="mb-3 mt-1" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_req.Password" Label="Initial Password"
+                              Variant="Variant.Outlined" InputType="InputType.Password"
+                              Required="true" HelperText="Min 8 chars, uppercase, digit, special char" />
+            </MudItem>
+        }
+
+        <!-- Actions -->
+        <MudItem xs="12" Class="d-flex justify-end gap-3 mt-2">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo("/tutors"))">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       OnClick="SaveAsync" Disabled="_saving"
+                       StartIcon="@Icons.Material.Filled.Save">
+                @(_saving ? "Saving…" : (_isNew ? "Create Tutor" : "Save Changes"))
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudForm>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid, _saving;
+    private bool _isNew => Id is null;
+    private DateTime? _dob;
+
+    private CreateTutorRequest _req = new() { Country = "Zambia" };
+
+    private List<BreadcrumbItem> _crumbs => new()
+    {
+        new("Home", "/"), new("Tutors", "/tutors"),
+        new(_isNew ? "Add" : "Edit", null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!_isNew && Id.HasValue)
+        {
+            var r = await Api.GetAsync<TutorDto>($"api/tutors/{Id}");
+            if (r.Success && r.Data is not null)
+            {
+                var t = r.Data;
+                _req.FirstName = t.FirstName; _req.LastName = t.LastName;
+                _req.Email = t.Email; _req.PhoneNumber = t.PhoneNumber;
+                _req.Qualification = t.Qualification; _req.Specialization = t.Specialization;
+                _req.Bio = t.Bio; _req.AvailabilityNotes = t.AvailabilityNotes;
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+        _saving = true;
+        if (_dob.HasValue) _req.DateOfBirth = _dob.Value;
+
+        ApiResult<TutorDto> result;
+        if (_isNew)
+            result = await Api.PostAsync<TutorDto>("api/tutors", _req);
+        else
+            result = await Api.PutAsync<TutorDto>($"api/tutors/{Id}", _req);
+
+        if (result.Success)
+        {
+            Snackbar.Add(_isNew ? "Tutor created!" : "Tutor updated.", Severity.Success);
+            Nav.NavigateTo("/tutors");
+        }
+        else Snackbar.Add(result.Error ?? "Save failed.", Severity.Error);
+        _saving = false;
+    }
+}

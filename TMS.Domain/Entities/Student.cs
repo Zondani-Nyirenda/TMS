@@ -47,6 +47,10 @@ public class Student : BaseEntity
     public ICollection<Result> Results { get; set; } = new List<Result>();
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
 
+    public ICollection<MaterialDownload> MaterialDownloads { get; set; } = new List<MaterialDownload>();
+    public ICollection<MaterialBookmark> MaterialBookmarks { get; set; } = new List<MaterialBookmark>();
+    public ICollection<VideoProgress> VideoProgresses { get; set; } = new List<VideoProgress>();
+
     // Computed helpers (not mapped)
     public int Age => DateTime.UtcNow.Year - DateOfBirth.Year -
                       (DateTime.UtcNow.DayOfYear < DateOfBirth.DayOfYear ? 1 : 0);

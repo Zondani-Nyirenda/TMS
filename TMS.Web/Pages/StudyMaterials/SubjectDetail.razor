@@ -1,0 +1,199 @@
+﻿@page "/study-materials/{SubjectId:guid}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Web.Services
+
+<PageTitle>@_subject?.Name – Study Materials</PageTitle>
+
+<!-- Breadcrumb -->
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4 px-0" />
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" />
+                    <MudSkeleton Class="mt-2" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_subject is null)
+{
+    <MudAlert Severity="Severity.Error">Subject not found.</MudAlert>
+}
+else
+{
+    <!-- Subject header -->
+    <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+        <div class="d-flex align-center gap-3">
+            <MudText Style="font-size:2.5rem">
+                @(_subject.IconEmoji ?? "📁")
+            </MudText>
+            <div>
+                <MudText Typo="Typo.h5" Class="fw-bold">@_subject.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @_subject.CategoryCount categor@(_subject.CategoryCount == 1 ? "y" : "ies") ·
+                    @_subject.MaterialCount material@(_subject.MaterialCount == 1 ? "" : "s")
+                </MudText>
+            </div>
+        </div>
+
+        <AuthorizeView Roles="Admin,Tutor">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.CreateNewFolder"
+                       OnClick="OpenCreateCategoryDialog">
+                New Category
+            </MudButton>
+        </AuthorizeView>
+    </div>
+
+    <!-- Category cards -->
+    @if (!_categories.Any())
+    {
+        <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+            <MudIcon Icon="@Icons.Material.Filled.FolderOpen"
+                     Style="font-size:4rem" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">
+                No categories yet
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Add categories like Books, Past Papers, Video Lessons.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var cat in _categories)
+            {
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="2"
+                              Class="pa-4 rounded-xl cursor-pointer"
+                              Style="transition: box-shadow .2s;"
+                              @onclick="@(() => Nav.NavigateTo(
+                                  $"/study-materials/{SubjectId}/categories/{cat.Id}"))">
+
+                        <div class="d-flex align-center justify-space-between">
+                            <MudText Style="font-size:2rem">
+                                @(cat.IconEmoji ?? "📂")
+                            </MudText>
+
+                            <AuthorizeView Roles="Admin,Tutor">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                         Size="Size.Small" Dense="true"
+                                         @onclick:stopPropagation="true">
+                                    <MudMenuItem OnClick="@(() => OpenEditCategoryDialog(cat))">
+                                        <div class="d-flex align-center gap-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.Edit"
+                                                     Size="Size.Small" />
+                                            Edit
+                                        </div>
+                                    </MudMenuItem>
+                                    <MudMenuItem OnClick="@(() => DeleteCategoryAsync(cat.Id, cat.Name))">
+                                        <div class="d-flex align-center gap-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.Delete"
+                                                     Size="Size.Small" Color="Color.Error" />
+                                            <MudText Color="Color.Error">Delete</MudText>
+                                        </div>
+                                    </MudMenuItem>
+                                </MudMenu>
+                            </AuthorizeView>
+                        </div>
+
+                        <MudText Typo="Typo.h6" Class="fw-bold mt-2">@cat.Name</MudText>
+                        <MudChip Size="Size.Small" Color="Color.Primary"
+                                 Class="mt-1" T="string">
+                            @cat.MaterialCount material@(cat.MaterialCount == 1 ? "" : "s")
+                        </MudChip>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+}
+
+@code {
+    [Parameter] public Guid SubjectId { get; set; }
+
+    private SubjectDto? _subject;
+    private List<MaterialCategorySummaryDto> _categories = new();
+    private bool _loading = true;
+
+    private List<BreadcrumbItem> _breadcrumbs => new()
+    {
+        new("Study Materials", "/study-materials"),
+        new(_subject?.Name ?? "...", null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var subjectResult = await Api.GetAsync<SubjectDto>($"api/subjects/{SubjectId}");
+        if (subjectResult.Success)
+            _subject = subjectResult.Data;
+
+        var catResult = await Api.GetAsync<List<MaterialCategorySummaryDto>>(
+            $"api/subjects/{SubjectId}/categories");
+        if (catResult.Success && catResult.Data is not null)
+            _categories = catResult.Data;
+
+        _loading = false;
+    }
+
+    private async Task OpenCreateCategoryDialog()
+    {
+        var parameters = new DialogParameters { ["SubjectId"] = SubjectId };
+        var dialog = await DialogService.ShowAsync<CategoryFormDialog>(
+            "New Category", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenEditCategoryDialog(MaterialCategorySummaryDto cat)
+    {
+        var parameters = new DialogParameters
+        {
+            ["SubjectId"] = SubjectId,
+            ["CategoryId"] = cat.Id,
+            ["ExistingName"] = cat.Name,
+            ["ExistingIconEmoji"] = cat.IconEmoji,
+            ["ExistingSortOrder"] = cat.SortOrder
+        };
+        var dialog = await DialogService.ShowAsync<CategoryFormDialog>(
+            "Edit Category", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteCategoryAsync(Guid id, string name)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Delete category '{name}' and all its materials?",
+            yesText: "Delete", noText: "Cancel");
+
+        if (confirmed != true) return;
+
+        var result = await Api.DeleteAsync($"api/subjects/categories/{id}");
+        if (result.Success)
+        {
+            Snackbar.Add($"'{name}' deleted.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+            Snackbar.Add(result.Error ?? "Delete failed.", Severity.Error);
+    }
+}

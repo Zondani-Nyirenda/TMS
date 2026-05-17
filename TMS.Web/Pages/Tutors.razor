@@ -1,0 +1,114 @@
+﻿@page "/tutors"
+@attribute [Authorize(Roles = "Admin")]
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Tutor
+@using TMS.Web.Services
+
+<PageTitle>Tutors – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Tutors</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage tutor profiles and course assignments</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.PersonAdd"
+               OnClick="@(() => Nav.NavigateTo("/tutors/new"))">
+        Add Tutor
+    </MudButton>
+</div>
+
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <MudTextField @bind-Value="_search" Placeholder="Search by name, email or specialization…"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Variant="Variant.Outlined" Clearable="true" Class="flex-grow-1"
+                  DebounceInterval="400" OnDebounceIntervalElapsed="@(() => _table.ReloadServerData())" />
+</MudPaper>
+
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable T="TutorDto" ServerData="@LoadData" @ref="_table" Hover="true" Dense="false">
+        <HeaderContent>
+            <MudTh>Tutor</MudTh>
+            <MudTh>Staff</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Specialization</MudTh>
+            <MudTh>Classes</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small">@context.FullName[..1]</MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.body2" Class="fw-semibold">@context.FullName</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Qualification</MudText>
+                    </div>
+                </div>
+            </MudTd>
+            <MudTd><MudChip T="string" Size="Size.Small">@context.StaffNumber</MudChip></MudTd>
+            <MudTd>@context.Email</MudTd>
+            <MudTd>@context.Specialization</MudTd>
+            <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Info">@context.ActiveClassCount</MudChip></MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string" Color="@(context.IsActive? Color.Success: Color.Default)">
+                    @(context.IsActive ? "Active" : "Inactive")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudTooltip Text="Edit">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Info"
+                                   OnClick="@(() => Nav.NavigateTo($"/tutors/{context.Id}/edit"))" />
+                </MudTooltip>
+                <MudTooltip Text="Delete">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => DeleteAsync(context.Id, context.FullName))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.SupervisedUserCircle" Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No tutors found.</MudText>
+            </div>
+        </NoRecordsContent>
+        <PagerContent><MudTablePager /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<TutorDto> _table = null!;
+    private string _search = string.Empty;
+
+    private async Task<TableData<TutorDto>> LoadData(TableState state, CancellationToken token)
+    {
+        var url = $"api/tutors?pageNumber={state.Page + 1}&pageSize={state.PageSize}&search={Uri.EscapeDataString(_search)}";
+        
+        // It's good practice to pass the token to your API call if your ApiClient supports it
+        var result = await Api.GetAsync<PagedResult<TutorDto>>(url);
+        
+        if (!result.Success || result.Data is null)
+            return new TableData<TutorDto>();
+            
+        return new TableData<TutorDto>
+        {
+            Items = result.Data.Items,
+            TotalItems = result.Data.TotalCount
+        };
+    }
+
+    private async Task DeleteAsync(Guid id, string name)
+    {
+        var ok = await DialogService.ShowMessageBox("Confirm Delete", $"Delete tutor {name}?", yesText: "Delete", noText: "Cancel");
+        if (ok != true) return;
+        var r = await Api.DeleteAsync($"api/tutors/{id}");
+        Snackbar.Add(r.Success ? $"{name} deleted." : r.Error ?? "Error", r.Success ? Severity.Success : Severity.Error);
+        if (r.Success) await _table.ReloadServerData();
+    }
+}

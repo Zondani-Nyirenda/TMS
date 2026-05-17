@@ -1,0 +1,153 @@
+﻿@page "/my-attendance"
+@using Microsoft.AspNetCore.Authorization
+@using TMS.Application.DTOs.Attendance
+@using TMS.Domain.Enums
+@attribute [Authorize(Roles = "Student,Parent")]
+@inject ApiClient Api
+@inject TmsAuthStateProvider AuthProvider
+@using MudBlazor
+@using TMS.Web.Auth
+@using TMS.Web.Services
+
+<PageTitle>My Attendance – TMS</PageTitle>
+
+<MudText Typo="Typo.h5" Class="fw-bold mb-1">My Attendance</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Your attendance record across all classes
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else
+{
+    <!-- Overall summary -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h4" Class="fw-bold" Color="Color.Success">
+                    @_overallPct.ToString("F0")%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Overall Rate</MudText>
+                <MudProgressLinear Value="@_overallPct" Color="@AttendanceColor(_overallPct)"
+                                   Rounded="true" Size="Size.Small" Class="mt-2" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h4" Class="fw-bold" Color="Color.Success">@_present</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Present</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h4" Class="fw-bold" Color="Color.Warning">@_late</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Late</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl text-center">
+                <MudText Typo="Typo.h4" Class="fw-bold" Color="Color.Error">@_absent</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Absent</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_overallPct < 75)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Your attendance is below 75%. Please improve your attendance to avoid academic consequences.
+        </MudAlert>
+    }
+
+    <!-- Per-class breakdown -->
+    @if (_classSummaries.Any())
+    {
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Per-Class Breakdown</MudText>
+        <MudGrid Class="mb-4">
+            @foreach (var s in _classSummaries)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="1" Class="rounded-xl">
+                        <MudCardContent>
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold">@s.ClassName</MudText>
+                            <div class="d-flex justify-space-between my-2">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Attendance</MudText>
+                                <MudText Typo="Typo.body2" Class="fw-bold"
+                                         Color="@AttendanceColor(s.Percentage)">
+                                    @s.Percentage.ToString("F1")%
+                                </MudText>
+                            </div>
+                            <MudProgressLinear Value="@s.Percentage"
+                                               Color="@AttendanceColor(s.Percentage)"
+                                               Rounded="true" Size="Size.Medium" />
+                            <div class="d-flex gap-3 mt-3">
+                                <MudText Typo="Typo.caption" Color="Color.Success">✓ @s.Present present</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Warning">⏰ @s.Late late</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Error">✗ @s.Absent absent</MudText>
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    <!-- Recent attendance log -->
+    @if (_recentRecords.Any())
+    {
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Recent Records</MudText>
+        <MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+            <MudTable Items="@_recentRecords" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>Date</MudTh>
+                    <MudTh>Class</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Remarks</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Date.ToString("dd MMM yyyy")</MudTd>
+                    <MudTd>@context.ClassName</MudTd>
+                    <MudTd>
+                        <MudChip Size="Size.Small" Color="@StatusColor(context.Status)" T="string" Label="true">
+                            @context.Status
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @(context.Remarks ?? "–")
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool   _loading    = true;
+    private double _overallPct = 0;
+    private int    _present = 0, _late = 0, _absent = 0;
+
+    private record ClassSummary(string ClassName, double Percentage, int Present, int Late, int Absent);
+    private List<ClassSummary>  _classSummaries = new();
+    private List<AttendanceDto> _recentRecords  = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Placeholder — wire to /api/students/me/attendance when endpoint is available
+        _loading = false;
+    }
+
+    private static Color AttendanceColor(double pct) =>
+        pct >= 85 ? Color.Success : pct >= 75 ? Color.Warning : Color.Error;
+
+    private static Color StatusColor(AttendanceStatus s) => s switch
+    {
+        AttendanceStatus.Present => Color.Success,
+        AttendanceStatus.Late    => Color.Warning,
+        AttendanceStatus.Excused => Color.Info,
+        _                        => Color.Error
+    };
+}

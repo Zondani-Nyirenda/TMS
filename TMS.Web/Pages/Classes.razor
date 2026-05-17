@@ -1,0 +1,200 @@
+﻿@page "/classes"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Course
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@using TMS.Web.Component.Dialog
+@attribute [Authorize(Roles = "Admin,Tutor,Student")]
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Classes – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Classes</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">All scheduled class sessions</MudText>
+    </div>
+    <AuthorizeView Roles="Admin">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog">New Class</MudButton>
+    </AuthorizeView>
+</div>
+
+<!-- Search -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <div class="d-flex gap-3 flex-wrap">
+        <MudTextField @bind-Value="_search" Placeholder="Search classes…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true" Class="flex-grow-1"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(() => _table.ReloadServerData())" />
+       <MudSelect T="string" 
+           Value="_dayFilter" 
+           Label="Day" 
+           Variant="Variant.Outlined"
+           Style="min-width:140px"
+           ValueChanged="@(async (string v) => { 
+               _dayFilter = v; 
+               await _table.ReloadServerData(); 
+           })">
+    <MudSelectItem Value="@("all")">All Days</MudSelectItem>
+    @foreach (var d in Enum.GetValues<DayOfWeekEnum>())
+    {
+        <MudSelectItem Value="@d.ToString()">@d</MudSelectItem>
+    }
+</MudSelect>
+    </div>
+</MudPaper>
+
+<!-- Table -->
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable T="ClassDto" ServerData="@LoadData" @ref="_table" Hover="true" Dense="false">
+        <HeaderContent>
+            <MudTh>Class</MudTh>
+            <MudTh>Course</MudTh>
+            <MudTh>Tutor</MudTh>
+            <MudTh>Schedule</MudTh>
+            <MudTh>Room</MudTh>
+            <MudTh>Enrolled</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="fw-semibold">@context.Name</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @context.StartDate.ToString("dd MMM yyyy")
+                    @(context.EndDate.HasValue ? $" – {context.EndDate.Value:dd MMM yyyy}" : "")
+                </MudText>
+            </MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2">@context.CourseName</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CourseCode</MudText>
+            </MudTd>
+            <MudTd>@context.TutorName</MudTd>
+            <MudTd>
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Secondary" />
+                    <MudText Typo="Typo.body2">
+                        @context.DayOfWeek · @context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")
+                    </MudText>
+                </div>
+            </MudTd>
+            <MudTd>@(string.IsNullOrEmpty(context.Room) ? "–" : context.Room)</MudTd>
+            <MudTd>
+                <div class="d-flex align-center gap-1">
+                    <MudText Typo="Typo.body2">@context.EnrolledCount / @context.MaxCapacity</MudText>
+                    @if (context.IsFull)
+                    {
+                        <MudChip Size="Size.Small" T="string" Color="Color.Error" Label="true">Full</MudChip>
+                    }
+                </div>
+                <MudProgressLinear Value="@(context.MaxCapacity > 0 ? context.EnrolledCount * 100.0 / context.MaxCapacity : 0)"
+                                   Color="@(context.IsFull ? Color.Error : Color.Primary)"
+                                   Size="Size.Small" Rounded="true" Class="mt-1" Style="max-width:80px" />
+            </MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string" Color="@StatusColor(context.Status)" Label="true">
+                    @context.Status
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudTooltip Text="View Students">
+                    <MudIconButton Icon="@Icons.Material.Filled.People" Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => OpenStudentsDialog(context))" />
+                </MudTooltip>
+                <AuthorizeView Roles="Admin">
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       Color="Color.Info"
+                                       OnClick="@(() => OpenEditDialog(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                       Color="Color.Error"
+                                       OnClick="@(() => DeleteAsync(context))" />
+                    </MudTooltip>
+                </AuthorizeView>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy"
+                         Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No classes found.</MudText>
+            </div>
+        </NoRecordsContent>
+        <PagerContent><MudTablePager /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<ClassDto> _table = null!;
+    private string _search    = string.Empty;
+    private string _dayFilter = "all";
+
+    private async Task<TableData<ClassDto>> LoadData(TableState state, CancellationToken token)
+    {
+        var url = $"api/classes?pageNumber={state.Page + 1}&pageSize={state.PageSize}" +
+                  $"&search={Uri.EscapeDataString(_search)}";
+    
+        // If your ApiClient supports CancellationToken, you can pass it here:
+        // var r = await Api.GetAsync<PagedResult<ClassDto>>(url, token);
+    
+        var r = await Api.GetAsync<PagedResult<ClassDto>>(url);
+    
+        if (!r.Success || r.Data is null)
+            return new TableData<ClassDto> { Items = Enumerable.Empty<ClassDto>(), TotalItems = 0 };
+        
+        return new TableData<ClassDto> { Items = r.Data.Items, TotalItems = r.Data.TotalCount };
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var d = await DialogService.ShowAsync<ClassFormDialog>("New Class",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (!(await d.Result).Canceled) await _table.ReloadServerData();
+    }
+
+    private async Task OpenEditDialog(ClassDto cls)
+    {
+        var p = new DialogParameters { ["Class"] = cls };
+        var d = await DialogService.ShowAsync<ClassFormDialog>("Edit Class", p,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (!(await d.Result).Canceled) await _table.ReloadServerData();
+    }
+
+    private async Task OpenStudentsDialog(ClassDto cls)
+    {
+        var p = new DialogParameters { ["ClassId"] = cls.Id, ["ClassName"] = cls.Name };
+        await DialogService.ShowAsync<ClassStudentsDialog>(cls.Name, p,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+    }
+
+    private async Task DeleteAsync(ClassDto cls)
+    {
+        var ok = await DialogService.ShowMessageBox("Delete Class",
+            $"Delete '{cls.Name}'? All attendance records will be removed.",
+            yesText: "Delete", noText: "Cancel");
+        if (ok != true) return;
+        var r = await Api.DeleteAsync($"api/classes/{cls.Id}");
+        Snackbar.Add(r.Success ? "Class deleted." : r.Error ?? "Error",
+            r.Success ? Severity.Success : Severity.Error);
+        if (r.Success) await _table.ReloadServerData();
+    }
+
+    private static Color StatusColor(ClassStatus s) => s switch
+    {
+        ClassStatus.Scheduled  => Color.Primary,
+        ClassStatus.InProgress => Color.Success,
+        ClassStatus.Completed  => Color.Default,
+        ClassStatus.Cancelled  => Color.Error,
+        _                      => Color.Default
+    };
+}

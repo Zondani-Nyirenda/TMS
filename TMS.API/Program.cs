@@ -1,5 +1,4 @@
 using FluentValidation.AspNetCore;
-using Microsoft.EntityFrameworkCore;
 using TMS.API.Extensions;
 using TMS.API.Filters;
 using TMS.API.Middleware;
@@ -13,19 +12,17 @@ var builder = WebApplication.CreateBuilder(args);
 // SERVICE REGISTRATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Clean Architecture layers ────────────────────────────────────────────────
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// ── API Controllers ─────────────────────────────────────────────────────────
+// ── API Controllers ───────────────────────────────────────────────────────────
 builder.Services
     .AddControllers(options =>
     {
-        options.Filters.Add<ValidationFilter>(); // auto-validates all requests
+        options.Filters.Add<ValidationFilter>();
     })
     .AddJsonOptions(options =>
     {
-        // Serialize enums as strings
         options.JsonSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter());
         options.JsonSerializerOptions.DefaultIgnoreCondition =
@@ -33,28 +30,42 @@ builder.Services
     })
     .AddFluentValidation(fv =>
     {
-        // Fixed: Use a non-static type or assembly directly
         fv.RegisterValidatorsFromAssembly(
             typeof(TMS.Application.ApplicationServiceRegistration).Assembly);
-
         fv.AutomaticValidationEnabled = true;
     });
 
-// ── JWT Authentication ──────────────────────────────────────────────────────
+// ── JWT Authentication ────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
-// ── Swagger ─────────────────────────────────────────────────────────────────
+// ── Swagger ───────────────────────────────────────────────────────────────────
 builder.Services.AddSwaggerWithJwt();
 builder.Services.AddEndpointsApiExplorer();
 
-// ── CORS ────────────────────────────────────────────────────────────────────
-builder.Services.AddTmsCors(builder.Configuration);
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// Single unified policy — covers both browser clients and the Blazor PWA
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("TmsPolicy", policy =>
+    {
+        policy.WithOrigins(
+                builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ??
+                new[]
+                {
+                    "https://localhost:7126",
+                    "http://localhost:7126"
+                })
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
-// ── Health checks ───────────────────────────────────────────────────────────
+// ── Health checks ─────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>("database");
 
-// ── HTTP Context ────────────────────────────────────────────────────────────
+// ── HTTP Context ──────────────────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
 
 
@@ -63,27 +74,27 @@ builder.Services.AddHttpContextAccessor();
 // ══════════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
 
-// ── Seed database on startup ────────────────────────────────────────────────
+// ── Seed database on startup ──────────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
     var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
     await seeder.SeedAsync();
 }
 
-// ── Development tools ───────────────────────────────────────────────────────
+// ── Development tools ─────────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "TMS API v1");
-        c.RoutePrefix = string.Empty; 
+        c.RoutePrefix = string.Empty;
         c.DisplayRequestDuration();
         c.EnableDeepLinking();
     });
 }
 
-// ── Security headers ────────────────────────────────────────────────────────
+// ── Security headers ──────────────────────────────────────────────────────────
 app.UseHttpsRedirection();
 
 app.Use(async (context, next) =>
@@ -95,17 +106,17 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// ── Global exception handler (must be early in pipeline) ────────────────────
+// ── Global exception handler ──────────────────────────────────────────────────
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// ── CORS ────────────────────────────────────────────────────────────────────
+// ── CORS — must come before Auth ──────────────────────────────────────────────
 app.UseCors("TmsPolicy");
 
-// ── Auth ────────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ── Endpoints ───────────────────────────────────────────────────────────────
+// ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapControllers();
 app.MapHealthChecks("/health");
 

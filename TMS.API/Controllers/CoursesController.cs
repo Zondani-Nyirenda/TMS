@@ -34,12 +34,30 @@ public class CoursesController : BaseController
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(CourseDto), 201)]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateCourseRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateCourseRequest request, CancellationToken ct)
     {
-        var course = await _courses.CreateAsync(request, ct);
-        return CreatedAtRoute("GetCourseById", new { id = course.Id },
-            new { success = true, data = course });
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value?.Errors.Select(e => e.ErrorMessage).ToArray()
+                );
+
+            return BadRequest(new { message = "Validation failed", errors });
+        }
+
+        try
+        {
+            var course = await _courses.CreateAsync(request, ct);
+            return CreatedAtRoute("GetCourseById", new { id = course.Id },
+                new { success = true, data = course });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>Update course details.</summary>

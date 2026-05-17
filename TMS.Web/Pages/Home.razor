@@ -1,7 +1,22 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject NavigationManager Nav
+@inject TMS.Web.Auth.TmsAuthStateProvider AuthProvider
 
-<PageTitle>Home</PageTitle>
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await AuthProvider.GetCurrentUserAsync();
+        var role = user?.Role.ToString() ?? "Admin";
 
-<h1>Hello, world!</h1>
+        var destination = role switch
+        {
+            "Tutor" => "/tutor/dashboard",
+            "Student" => "/student/dashboard",
+            _ => "/admin/dashboard"
+        };
 
-Welcome to your new app.
+        Nav.NavigateTo(destination, forceLoad: false);
+    }
+}

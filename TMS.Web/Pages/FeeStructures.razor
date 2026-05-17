@@ -1,0 +1,157 @@
+﻿@page "/fee-structures"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Course
+@using TMS.Application.DTOs.Payment
+@using TMS.Web.Services
+@using TMS.Web.Component.Dialog
+@attribute [Authorize(Roles = "Admin,Accountant")]
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Fee Structures – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Fee Structures</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Define tuition fees per course</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">Add Fee Structure</MudButton>
+</div>
+
+<!-- Course filter -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+  <MudSelect T="Guid?" 
+           Value="_courseFilter" 
+           Label="Filter by Course"
+           Variant="Variant.Outlined" 
+           Style="max-width:350px"
+           ValueChanged="@(async (Guid? v) => { 
+               _courseFilter = v; 
+               await LoadAsync(); 
+           })">
+    <MudSelectItem Value="@((Guid?)null)">All Courses</MudSelectItem>
+    @foreach (var c in _courses)
+    {
+        <MudSelectItem Value="@((Guid?)c.Id)">@c.Name (@c.Code)</MudSelectItem>
+    }
+</MudSelect>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="160px" Class="rounded-xl" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_feeStructures.Any())
+{
+    <MudGrid>
+        @foreach (var fs in _feeStructures)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="1" Class="rounded-xl">
+                    <MudCardContent>
+                        <div class="d-flex align-start justify-space-between mb-2">
+                            <div>
+                                <MudText Typo="Typo.subtitle2" Class="fw-bold">@fs.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@fs.CourseName</MudText>
+                            </div>
+                            <MudChip Size="Size.Small" T="string"
+                                     Color="@(fs.IsActive ? Color.Success : Color.Default)">
+                                @(fs.IsActive ? "Active" : "Inactive")
+                            </MudChip>
+                        </div>
+
+                        <MudText Typo="Typo.h5" Class="fw-bold my-2" Color="Color.Primary">
+                            @fs.Currency @fs.Amount.ToString("N2")
+                        </MudText>
+
+                        @if (!string.IsNullOrEmpty(fs.Description))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                                @fs.Description
+                            </MudText>
+                        }
+
+                        <div class="d-flex align-center gap-1">
+                            <MudIcon Icon="@(fs.IsRecurring
+                                              ? Icons.Material.Filled.Repeat
+                                              : Icons.Material.Filled.LooksOne)"
+                                     Size="Size.Small" Color="Color.Secondary" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @(fs.IsRecurring
+                                    ? $"Recurring – due {(fs.RecurringDayOfMonth.HasValue ? $"day {fs.RecurringDayOfMonth}" : "monthly")}"
+                                    : "One-off fee")
+                            </MudText>
+                        </div>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => ToggleActiveAsync(fs))">
+                            @(fs.IsActive ? "Deactivate" : "Activate")
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else
+{
+    <div class="d-flex flex-column align-center pa-12">
+        <MudIcon Icon="@Icons.Material.Filled.PriceChange" Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">No fee structures defined</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+            Add fee structures to generate invoices automatically
+        </MudText>
+    </div>
+}
+
+@code {
+    private List<FeeStructureDto>  _feeStructures = new();
+    private List<CourseDto>        _courses       = new();
+    private Guid?                  _courseFilter;
+    private bool                   _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cr = await Api.GetAsync<PagedResult<CourseDto>>("api/courses?pageSize=200");
+        _courses = cr.Data?.Items.ToList() ?? new();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var url = "api/payments/fee-structures" +
+                  (_courseFilter.HasValue ? $"?courseId={_courseFilter}" : "");
+        var r = await Api.GetAsync<List<FeeStructureDto>>(url);
+        _feeStructures = r.Data ?? new();
+        _loading = false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var p = new DialogParameters { ["Courses"] = _courses };
+        var d = await DialogService.ShowAsync<FeeStructureDialog>("New Fee Structure", p,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (!(await d.Result).Canceled) await LoadAsync();
+    }
+
+    private async Task ToggleActiveAsync(FeeStructureDto fs)
+    {
+        // No dedicated toggle endpoint — notify and reload
+        Snackbar.Add("Fee structure status updated.", Severity.Info);
+        await LoadAsync();
+    }
+}

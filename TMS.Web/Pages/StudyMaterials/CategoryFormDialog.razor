@@ -1,0 +1,141 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(CategoryId.HasValue ? "Edit Category" : "New Category")
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_name"
+                              Label="Category Name *"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_description"
+                              Label="Description"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudTextField @bind-Value="_iconEmoji"
+                              Label="Icon Emoji"
+                              Placeholder="e.g. 📝"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudNumericField @bind-Value="_sortOrder"
+                                 Label="Sort Order"
+                                 Variant="Variant.Outlined"
+                                 Min="0"
+                                 FullWidth="true" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="SubmitAsync"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(CategoryId.HasValue ? "Save Changes" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid SubjectId { get; set; }
+    [Parameter] public Guid? CategoryId { get; set; }
+    [Parameter] public string ExistingName { get; set; } = string.Empty;
+    [Parameter] public string? ExistingDescription { get; set; }
+    [Parameter] public string? ExistingIconEmoji { get; set; }
+    [Parameter] public int ExistingSortOrder { get; set; }
+
+    private string _name = string.Empty;
+    private string? _description;
+    private string? _iconEmoji;
+    private int _sortOrder;
+    private bool _saving;
+
+    protected override void OnParametersSet()
+    {
+        _name = ExistingName;
+        _description = ExistingDescription;
+        _iconEmoji = ExistingIconEmoji;
+        _sortOrder = ExistingSortOrder;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            Snackbar.Add("Category name is required.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+
+        if (CategoryId.HasValue)
+        {
+            var result = await Api.PutAsync<MaterialCategoryDto>(
+                $"api/subjects/categories/{CategoryId}",
+                new UpdateMaterialCategoryRequest
+                {
+                    Name = _name,
+                    Description = _description,
+                    IconEmoji = _iconEmoji,
+                    SortOrder = _sortOrder
+                });
+
+            if (result.Success)
+            {
+                Snackbar.Add("Category updated.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+                Snackbar.Add(result.Error ?? "Update failed.", Severity.Error);
+        }
+        else
+        {
+            var result = await Api.PostAsync<MaterialCategoryDto>(
+                $"api/subjects/{SubjectId}/categories",
+                new CreateMaterialCategoryRequest
+                {
+                    SubjectId = SubjectId,
+                    Name = _name,
+                    Description = _description,
+                    IconEmoji = _iconEmoji,
+                    SortOrder = _sortOrder
+                });
+
+            if (result.Success)
+            {
+                Snackbar.Add("Category created.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+                Snackbar.Add(result.Error ?? "Create failed.", Severity.Error);
+        }
+
+        _saving = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

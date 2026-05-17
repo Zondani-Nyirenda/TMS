@@ -123,3 +123,68 @@ public enum DayOfWeekEnum
     Saturday,
     Sunday
 }
+
+// ── Course Content ────────────────────────────────────────────────────────────
+
+/// <summary>Top-level grouping inside a course (e.g. "Week 1", "Module 2").</summary>
+public enum ContentModuleStatus
+{
+    Draft,
+    Published,
+    Archived
+}
+
+/// <summary>The kind of resource attached to a content item.</summary>
+public enum ResourceType
+{
+    Document,   // PDF, Word, PowerPoint, etc.
+    Video,      // MP4, MOV streamed from server
+    Audio,      // MP3, WAV
+    Image,      // PNG, JPG, GIF
+    Link,       // External URL
+    Archive,    // ZIP, RAR
+    Other
+}
+
+/// <summary>Controls who may access a resource.</summary>
+public enum ResourceAccessLevel
+{
+    /// <summary>Visible to all enrolled students in the course.</summary>
+    AllStudents,
+    /// <summary>Visible only to tutors and admins.</summary>
+    TutorsOnly,
+    /// <summary>Restricted — access explicitly granted per student.</summary>
+    Restricted
+}
+
+public enum MaterialType
+{
+    Book,
+    Notes,
+    VideoLesson,
+    PastPaper,
+    MarkingScheme,
+    Assignment,
+    Quiz,
+    AudioLecture,
+    Presentation,
+    Other
+}
+
+public enum MaterialFileType
+{
+    Pdf,
+    Video,
+    Image,
+    Audio,
+    Zip,
+
+}
+
+public enum MaterialAccessLevel
+{
+    AllStudents,
+    PremiumOnly,
+    TeachersOnly,
+ 
+}

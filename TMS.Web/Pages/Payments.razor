@@ -1,0 +1,188 @@
+﻿@page "/payments"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Payment
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@attribute [Authorize(Roles = "Admin,Accountant")]
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Payments – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Payments</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">All recorded payment receipts</MudText>
+    </div>
+</div>
+
+<!-- Summary row -->
+<MudGrid Class="mb-4">
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Success">
+                ZMW @_totalCollected.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Collected @DateTime.Now.Year</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Primary">
+                @_paymentCount
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Transactions</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Warning">
+                ZMW @_totalOutstanding.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Outstanding</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Error">
+                ZMW @_totalOverdue.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Overdue</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<!-- Filter bar -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <div class="d-flex gap-3 flex-wrap">
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search by student name or receipt number…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true" Class="flex-grow-1"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(() => _table.ReloadServerData())" />
+       <MudSelect T="string" 
+           Value="_methodFilter" 
+           Label="Method" 
+           Variant="Variant.Outlined"
+           Style="min-width:150px"
+           ValueChanged="@(async (string v) => { 
+               _methodFilter = v; 
+               await _table.ReloadServerData(); 
+           })">
+    <MudSelectItem Value="@("all")">All Methods</MudSelectItem>
+    @foreach (var m in Enum.GetValues<PaymentMethod>())
+    {
+        <MudSelectItem Value="@m.ToString()">@m</MudSelectItem>
+    }
+</MudSelect>
+    </div>
+</MudPaper>
+
+<!-- Table -->
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable T="PaymentDto" ServerData="@LoadData" @ref="_table" Hover="true" Dense="false">
+        <HeaderContent>
+            <MudTh>Receipt #</MudTh>
+            <MudTh>Student</MudTh>
+            <MudTh>Invoice</MudTh>
+            <MudTh>Amount</MudTh>
+            <MudTh>Method</MudTh>
+            <MudTh>Date</MudTh>
+            <MudTh>Reference</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="fw-bold">@context.ReceiptNumber</MudText>
+            </MudTd>
+            <MudTd>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Small">@context.StudentName[..1]</MudAvatar>
+                    <MudText Typo="Typo.body2">@context.StudentName</MudText>
+                </div>
+            </MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@context.InvoiceNumber</MudText>
+            </MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="fw-bold" Color="Color.Success">
+                    @context.Currency @context.Amount.ToString("N2")
+                </MudText>
+            </MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string" Color="@MethodColor(context.Method)" Label="true">
+                    @context.Method
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.PaymentDate.ToString("dd MMM yyyy")</MudTd>
+            <MudTd>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @(string.IsNullOrEmpty(context.Reference) ? "–" : context.Reference)
+                </MudText>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No payments recorded yet.</MudText>
+            </div>
+        </NoRecordsContent>
+        <PagerContent><MudTablePager /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<PaymentDto> _table = null!;
+    private string _search       = string.Empty;
+    private string _methodFilter = "all";
+    private decimal _totalCollected = 0, _totalOutstanding = 0, _totalOverdue = 0;
+    private int     _paymentCount   = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Api.GetAsync<FinancialSummaryDto>($"api/payments/summary?year={DateTime.Now.Year}");
+        if (r.Success && r.Data is not null)
+        {
+            _totalCollected  = r.Data.TotalCollected;
+            _totalOutstanding= r.Data.TotalOutstanding;
+            _totalOverdue    = r.Data.TotalOverdue;
+            _paymentCount    = r.Data.InvoiceCount;
+        }
+    }
+
+    private async Task<TableData<PaymentDto>> LoadData(TableState state, CancellationToken token)
+    {
+        // Payments come back inside invoices – we list invoices and show payment rows
+        var url = $"api/payments/invoices?pageNumber={state.Page + 1}&pageSize={state.PageSize}" +
+                  $"&search={Uri.EscapeDataString(_search)}";
+
+        // Pass the token to the Api call if your ApiClient supports it
+        var result = await Api.GetAsync<PagedResult<InvoiceDto>>(url);
+    
+        if (!result.Success || result.Data is null)
+            return new TableData<PaymentDto> { Items = Enumerable.Empty<PaymentDto>(), TotalItems = 0 };
+
+        // Flatten payments from all invoices
+        var payments = result.Data.Items
+            .SelectMany(i => i.Payments)
+            .OrderByDescending(p => p.PaymentDate)
+            .ToList();
+
+        return new TableData<PaymentDto>
+        {
+            Items = payments,
+            TotalItems = result.Data.TotalCount // Use the total count from server, not local list count
+        };
+    }
+
+    private static Color MethodColor(PaymentMethod m) => m switch
+    {
+        PaymentMethod.Cash          => Color.Success,
+        PaymentMethod.BankTransfer  => Color.Primary,
+        PaymentMethod.MobileMoney   => Color.Secondary,
+        PaymentMethod.CreditCard    => Color.Info,
+        _                           => Color.Default
+    };
+}

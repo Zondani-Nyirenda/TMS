@@ -1,0 +1,105 @@
+﻿@* ─────────────────────────────────────────────────────────────────────────
+   CreateExamDialog.razor
+   ───────────────────────────────────────────────────────────────────────── *@
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Quiz" Class="mr-2" />New Exam
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_req.Title" Label="Exam Title"
+                                  Variant="Variant.Outlined" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_req.ClassId" Label="Class"
+                               Variant="Variant.Outlined" Required="true">
+                        @foreach (var c in _classes)
+                        {
+                            <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_req.Type" Label="Exam Type"
+                               Variant="Variant.Outlined">
+                        @foreach (var t in Enum.GetValues<TMS.Domain.Enums.ExamType>())
+                        {
+                            <MudSelectItem Value="@t">@t</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker @bind-Date="_examDate" Label="Exam Date"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="_req.TotalMarks" Label="Total Marks"
+                                     Variant="Variant.Outlined" Min="1" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="_req.PassMark" Label="Pass Mark"
+                                     Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_req.Description" Label="Description (optional)"
+                                  Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Creating…" : "Create Exam")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm _form  = null!;
+    private bool    _valid = false;
+    private bool    _saving = false;
+
+    private TMS.Application.DTOs.Exam.CreateExamRequest _req = new()
+    {
+        TotalMarks = 100, PassMark = 50
+    };
+    private DateTime? _examDate = DateTime.Today.AddDays(7);
+    private List<TMS.Application.DTOs.Course.ClassDto> _classes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Api.GetAsync<TMS.Application.Common.PagedResult<
+            TMS.Application.DTOs.Course.ClassDto>>("api/classes?pageSize=100");
+        if (r.Success && r.Data is not null)
+            _classes = r.Data.Items.ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+        _saving = true;
+        _req.ExamDate = _examDate ?? DateTime.Today;
+
+        var r = await Api.PostAsync<TMS.Application.DTOs.Exam.ExamDto>("api/exams", _req);
+        if (r.Success)
+            MudDialog.Close(DialogResult.Ok(r.Data));
+        else
+            Snackbar.Add(r.Error ?? "Error", Severity.Error);
+
+        _saving = false;
+    }
+}

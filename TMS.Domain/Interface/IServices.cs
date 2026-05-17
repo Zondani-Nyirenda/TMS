@@ -34,3 +34,8 @@ public interface IPushNotificationService
     Task SendToRoleAsync(string role, string title, string body,
         CancellationToken ct = default);
 }
+
+/// <summary>
+/// Abstracts file storage (local disk, Azure Blob, S3, etc.).
+/// Infrastructure provides the concrete implementation.
+/// </summary>

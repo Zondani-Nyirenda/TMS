@@ -1,0 +1,265 @@
+﻿@page "/exams"
+@* @attribute [Authorize(Roles = "Admin,Tutor,Student")] *@
+
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Web.Services
+@using TMS.Web.Component.Dialog
+
+<PageTitle>Exams – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Exams & Assessments</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage exams, enter marks and publish results</MudText>
+    </div>
+    <AuthorizeView Roles="Admin,Tutor">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog">
+            New Exam
+        </MudButton>
+    </AuthorizeView>
+</div>
+
+<!-- Filter bar -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <div class="d-flex align-center gap-3 flex-wrap">
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search exams…"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      Class="flex-grow-1"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(() => _table?.ReloadServerData())" />
+
+        <MudSelect T="Guid"
+                   Value="_classFilter"
+                   Label="Class"
+                   Variant="Variant.Outlined"
+                   Style="min-width:200px"
+                   ValueChanged="@(async (Guid v) => { _classFilter = v; await _table.ReloadServerData(); })">
+            <MudSelectItem Value="Guid.Empty">All Classes</MudSelectItem>
+            @foreach (var c in _classes)
+            {
+                <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+</MudPaper>
+
+<!-- Table -->
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable T="TMS.Application.DTOs.Exam.ExamDto"
+              ServerData="@LoadServerData"
+              @ref="_table"
+              Hover="true"
+              Dense="false">
+
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh>Class</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Date</MudTh>
+            <MudTh>Total Marks</MudTh>
+            <MudTh>Results</MudTh>
+            <MudTh>Published</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+
+        <RowTemplate Context="exam">
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="fw-semibold">@exam.Title</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@exam.CourseName</MudText>
+            </MudTd>
+            <MudTd>@exam.ClassName</MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string" Color="@ExamTypeColor(exam.Type)">
+                    @exam.Type
+                </MudChip>
+            </MudTd>
+            <MudTd>@exam.ExamDate.ToString("dd MMM yyyy")</MudTd>
+            <MudTd>@exam.TotalMarks / Pass: @exam.PassMark</MudTd>
+            <MudTd>
+                @if (exam.ResultCount > 0)
+                {
+                    <MudText Typo="Typo.body2">
+                        @exam.ResultCount entered
+                        @if (exam.AverageScore.HasValue)
+                        {
+                            <span> · Avg: @exam.AverageScore.Value.ToString("F1")%</span>
+                        }
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary" Typo="Typo.body2">No results yet</MudText>
+                }
+            </MudTd>
+            <MudTd>
+                @if (exam.IsPublished)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Default" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                <AuthorizeView Roles="Admin,Tutor">
+                    <MudTooltip Text="Enter Results">
+                        <MudIconButton Icon="@Icons.Material.Filled.Grading"
+                                       Size="Size.Small" Color="Color.Primary"
+                                       OnClick="@(() => OpenResultsDialog(exam))" />
+                    </MudTooltip>
+
+                    @if (!exam.IsPublished && exam.ResultCount > 0)
+                    {
+                        <MudTooltip Text="Publish Results">
+                            <MudIconButton Icon="@Icons.Material.Filled.Publish"
+                                           Size="Size.Small" Color="Color.Success"
+                                           OnClick="@(() => PublishAsync(exam))" />
+                        </MudTooltip>
+                    }
+
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteAsync(exam))" />
+                    </MudTooltip>
+                </AuthorizeView>
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.Quiz" Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No exams found.</MudText>
+            </div>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<TMS.Application.DTOs.Exam.ExamDto> _table = null!;
+    private string _search = string.Empty;
+    private Guid _classFilter = Guid.Empty;
+    private List<TMS.Application.DTOs.Course.ClassDto> _classes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Api.GetAsync<TMS.Application.Common.PagedResult<TMS.Application.DTOs.Course.ClassDto>>(
+            "api/classes?pageSize=100");
+
+        if (r.Success && r.Data is not null)
+            _classes = r.Data.Items.ToList();
+    }
+
+    private async Task<TableData<TMS.Application.DTOs.Exam.ExamDto>> LoadServerData(
+        TableState state, CancellationToken cancellationToken = default)
+    {
+        var url = $"api/exams?pageNumber={state.Page + 1}&pageSize={state.PageSize}" +
+                  $"&search={Uri.EscapeDataString(_search)}";
+
+        if (_classFilter != Guid.Empty)
+            url += $"&classId={_classFilter}";
+
+        var result = await Api.GetAsync<TMS.Application.Common.PagedResult<TMS.Application.DTOs.Exam.ExamDto>>(url);
+
+        if (!result.Success || result.Data is null)
+            return new TableData<TMS.Application.DTOs.Exam.ExamDto>();
+
+        return new TableData<TMS.Application.DTOs.Exam.ExamDto>
+        {
+            Items = result.Data.Items,
+            TotalItems = result.Data.TotalCount
+        };
+    }
+
+    private async Task OnClassFilterChanged(Guid value)
+    {
+        _classFilter = value;
+        if (_table != null)
+            await _table.ReloadServerData();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var d = await DialogService.ShowAsync<CreateExamDialog>("New Exam", opts);
+        var result = await d.Result;
+
+        if (!result.Canceled)
+            await _table.ReloadServerData();
+    }
+
+    private async Task OpenResultsDialog(TMS.Application.DTOs.Exam.ExamDto exam)
+    {
+        var p = new DialogParameters { ["Exam"] = exam };
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+
+        var d = await DialogService.ShowAsync<EnterResultsDialog>("Enter Results", p, opts);
+        var result = await d.Result;
+
+        if (!result.Canceled)
+        {
+            Snackbar.Add("Results saved.", Severity.Success);
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task PublishAsync(TMS.Application.DTOs.Exam.ExamDto exam)
+    {
+        var ok = await DialogService.ShowMessageBox(
+            "Publish Results",
+            $"Publish results for '{exam.Title}'? Students will be able to see their marks.",
+            yesText: "Publish", noText: "Cancel");
+
+        if (ok != true) return;
+
+        var r = await Api.PostAsync<bool>($"api/exams/{exam.Id}/publish", new { });
+        Snackbar.Add(r.Success ? "Results published!" : r.Error ?? "Error",
+                     r.Success ? Severity.Success : Severity.Error);
+
+        if (r.Success)
+            await _table.ReloadServerData();
+    }
+
+    private async Task DeleteAsync(TMS.Application.DTOs.Exam.ExamDto exam)
+    {
+        var ok = await DialogService.ShowMessageBox(
+            "Delete Exam",
+            $"Delete '{exam.Title}'?",
+            yesText: "Delete", noText: "Cancel");
+
+        if (ok != true) return;
+
+        var r = await Api.DeleteAsync($"api/exams/{exam.Id}");
+        Snackbar.Add(r.Success ? "Exam deleted." : r.Error ?? "Error",
+                     r.Success ? Severity.Success : Severity.Error);
+
+        if (r.Success)
+            await _table.ReloadServerData();
+    }
+
+    private static Color ExamTypeColor(TMS.Domain.Enums.ExamType t) => t switch
+    {
+        TMS.Domain.Enums.ExamType.FinalExam => Color.Error,
+        TMS.Domain.Enums.ExamType.MidTerm => Color.Warning,
+        TMS.Domain.Enums.ExamType.Quiz => Color.Info,
+        TMS.Domain.Enums.ExamType.Assignment => Color.Secondary,
+        _ => Color.Default
+    };
+}

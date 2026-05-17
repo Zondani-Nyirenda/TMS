@@ -1,0 +1,40 @@
+﻿@using MudBlazor
+@inject IJSRuntime JS
+
+<MudPaper Class="pa-5" Elevation="0" Style="border-radius:12px;">
+    <div class="d-flex align-center justify-space-between mb-3">
+        <div>
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700;font-size:14px;letter-spacing:-0.2px;">
+                Enrolment Trend — 2025
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:11px;">
+                Monthly student enrolments vs departures
+            </MudText>
+        </div>
+        <div class="d-flex align-center gap-3">
+            <div class="d-flex align-center gap-1">
+                <div style="width:8px;height:8px;border-radius:2px;background:#6366F1;"></div>
+                <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:11px;">Enrolments</MudText>
+            </div>
+            <div class="d-flex align-center gap-1">
+                <div style="width:8px;height:8px;border-radius:2px;background:#EF4444;"></div>
+                <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:11px;">Withdrawals</MudText>
+            </div>
+            <div class="d-flex align-center gap-1">
+                <div style="width:8px;height:8px;border-radius:2px;background:#10B981;"></div>
+                <MudText Typo="Typo.caption" Style="color:var(--mud-palette-text-secondary);font-size:11px;">Net Growth</MudText>
+            </div>
+        </div>
+    </div>
+    <div style="position:relative;height:210px;">
+        <canvas id="enrolmentChart"></canvas>
+    </div>
+</MudPaper>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("initRevenueChart");
+    }
+}

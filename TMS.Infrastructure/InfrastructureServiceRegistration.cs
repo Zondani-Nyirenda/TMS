@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TMS.Application.Interfaces;
 using TMS.Domain.Entities;
 using TMS.Domain.Interfaces;
 using TMS.Infrastructure.Persistence;
@@ -29,27 +30,22 @@ public static class InfrastructureServiceRegistration
                         errorNumbersToAdd: null);
                 }));
 
-        // ── ASP.NET Core Identity (Fixed) ─────────────────────────────────────
-        services.AddIdentityCore<ApplicationUser>(options =>
+        // ── ASP.NET Core Identity ─────────────────────────────────────────────
+        services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {
-            // Password policy
             options.Password.RequiredLength = 8;
             options.Password.RequireUppercase = true;
             options.Password.RequireLowercase = true;
             options.Password.RequireDigit = true;
             options.Password.RequireNonAlphanumeric = true;
-
-            // Lockout policy
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.AllowedForNewUsers = true;
-
-            // User settings
             options.User.RequireUniqueEmail = true;
+            options.SignIn.RequireConfirmedEmail = false;
         })
-        .AddRoles<IdentityRole>()                    // Important
-        .AddEntityFrameworkStores<AppDbContext>();
-       
+        .AddEntityFrameworkStores<AppDbContext>()
+        .AddDefaultTokenProviders();
 
         // ── Repository + Unit of Work ─────────────────────────────────────────
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -57,6 +53,7 @@ public static class InfrastructureServiceRegistration
 
         // ── Infrastructure services ───────────────────────────────────────────
         services.AddScoped<INumberGeneratorService, NumberGeneratorService>();
+        services.AddScoped<IFileStorageService, LocalFileStorageService>(); // ← this line
 
         // ── Database seeder ───────────────────────────────────────────────────
         services.AddScoped<DatabaseSeeder>();

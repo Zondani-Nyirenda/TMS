@@ -1,24 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TMS.Web</title>
+    <title>TMS — Tuition Management System</title>
     <base href="/" />
-    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
-    <link rel="stylesheet" href="css/app.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="TMS.Web.styles.css" rel="stylesheet" />
-</head>
 
-<body>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#1976D2" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TMS" />
+    <link rel="apple-touch-icon" href="icon/icon-192.png" />
+
+    <!-- DM Sans font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+
+    <!-- MudBlazor -->
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+
+    <!-- Custom styles -->
+    <link href="css/app.css" rel="stylesheet" />
+
+    <link rel="icon" href="icon/icon-192.png" />
+</head>
+<body style="background:#0B0D14;margin:0;">
+
     <div id="app">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
-        <div class="loading-progress-text"></div>
+        <div style="display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:20px;background:#0B0D14;">
+            <!-- Logo mark -->
+            <div style="width:52px;height:52px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(99,102,241,0.35);">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 3L1 9L12 15L23 9L12 3Z" fill="white" opacity="0.9" />
+                    <path d="M1 15L12 21L23 15" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+                </svg>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-family:'DM Sans',sans-serif;color:#F9FAFB;font-size:15px;font-weight:600;letter-spacing:-0.3px;">
+                    Tuition Management System
+                </div>
+                <div style="font-family:'DM Sans',sans-serif;color:#6B7280;font-size:12px;margin-top:4px;">
+                    Loading your workspace…
+                </div>
+            </div>
+            <!-- Loading bar -->
+            <div style="width:160px;height:2px;background:#1E2130;border-radius:2px;overflow:hidden;">
+                <div style="height:100%;width:40%;background:linear-gradient(90deg,#6366F1,#8B5CF6);border-radius:2px;animation:loading 1.2s ease-in-out infinite alternate;">
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="blazor-error-ui">
@@ -26,7 +59,49 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
-    <script src="_framework/blazor.webassembly.js"></script>
-</body>
 
+    <style>
+        @keyframes loading {
+            from {
+                transform: translateX(-100%);
+            }
+
+            to {
+                transform: translateX(300%);
+            }
+        }
+    </style>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- MudBlazor scripts -->
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+
+    <!-- Custom helpers -->
+    <script src="js/charts.js"></script>
+    <script src="js/fileDownload.js"></script>
+    <script src="js/pwaInstall.js"></script>
+
+    <!-- Blazor WASM bootstrap -->
+    <script src="_framework/blazor.webassembly.js"></script>
+
+    <!-- PWA Service Worker registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('[SW] Registered, scope:', reg.scope))
+                    .catch(err => console.warn('[SW] Registration failed:', err));
+            });
+
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data?.type === 'ATTENDANCE_SYNCED') {
+                    console.log(`[SW] Synced ${event.data.count} offline attendance record(s)`);
+                }
+            });
+        }
+    </script>
+
+</body>
 </html>

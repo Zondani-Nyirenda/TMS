@@ -1,0 +1,146 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Class="mr-2" />
+            Record Payment
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (Invoice is not null)
+        {
+            <!-- Invoice summary -->
+            <MudPaper Elevation="0" Class="pa-3 mb-4 rounded-lg"
+                      Style="background:var(--mud-palette-background-grey)">
+                <div class="d-flex justify-space-between mb-1">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Invoice</MudText>
+                    <MudText Typo="Typo.body2" Class="fw-bold">@Invoice.InvoiceNumber</MudText>
+                </div>
+                <div class="d-flex justify-space-between mb-1">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Student</MudText>
+                    <MudText Typo="Typo.body2">@Invoice.StudentName</MudText>
+                </div>
+                <div class="d-flex justify-space-between mb-1">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Total</MudText>
+                    <MudText Typo="Typo.body2">@Invoice.Currency @Invoice.TotalAmount.ToString("N2")</MudText>
+                </div>
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Balance Due</MudText>
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold" Color="Color.Error">
+                        @Invoice.Currency @Invoice.BalanceAmount.ToString("N2")
+                    </MudText>
+                </div>
+            </MudPaper>
+
+            <MudForm @ref="_form" @bind-IsValid="_valid">
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudNumericField @bind-Value="_amount"
+                                         Label="Payment Amount"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentText="@Invoice.Currency"
+                                         Min="0.01m" Max="@Invoice.BalanceAmount"
+                                         Format="N2" Required="true" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="_method" Label="Payment Method"
+                                   Variant="Variant.Outlined" Required="true">
+                            @foreach (var m in Enum.GetValues<TMS.Domain.Enums.PaymentMethod>())
+                            {
+                                <MudSelectItem Value="@m">@m</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_paymentDate"
+                                       Label="Payment Date"
+                                       Variant="Variant.Outlined"
+                                       MaxDate="DateTime.Today" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_reference"
+                                      Label="Reference / Receipt Number (optional)"
+                                      Variant="Variant.Outlined"
+                                      Placeholder="Bank reference, mobile money ID, etc." />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_notes"
+                                      Label="Notes (optional)"
+                                      Variant="Variant.Outlined" Lines="2" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Processing…" : "Confirm Payment")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public TMS.Application.DTOs.Payment.InvoiceDto? Invoice { get; set; }
+
+    private MudForm  _form  = null!;
+    private bool     _valid = false;
+    private bool     _saving = false;
+
+    private decimal  _amount = 0;
+    private TMS.Domain.Enums.PaymentMethod _method = TMS.Domain.Enums.PaymentMethod.Cash;
+    private DateTime? _paymentDate = DateTime.Today;
+    private string?   _reference;
+    private string?   _notes;
+
+    protected override void OnParametersSet()
+    {
+        if (Invoice is not null)
+            _amount = Invoice.BalanceAmount;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid || Invoice is null) return;
+
+        _saving = true;
+
+        var request = new TMS.Application.DTOs.Payment.RecordPaymentRequest
+        {
+            InvoiceId   = Invoice.Id,
+            Amount      = _amount,
+            Currency    = Invoice.Currency,
+            Method      = _method,
+            PaymentDate = _paymentDate ?? DateTime.Today,
+            Reference   = _reference,
+            Notes       = _notes
+        };
+
+        var result = await Api.PostAsync<TMS.Application.DTOs.Payment.PaymentDto>(
+            "api/payments/record", request);
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(result.Data));
+        else
+            Snackbar.Add(result.Error ?? "Payment failed.", Severity.Error);
+
+        _saving = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

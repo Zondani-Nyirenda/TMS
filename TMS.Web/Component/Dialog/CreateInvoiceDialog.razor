@@ -1,0 +1,222 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
+            Create New Invoice
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+                <!-- Student picker -->
+                <MudItem xs="12">
+                    <MudAutocomplete T="TMS.Application.DTOs.Student.StudentSummaryDto"
+                                     Label="Student"
+                                     Variant="Variant.Outlined"
+                                     SearchFunc="SearchStudentsAsync"
+                                     ToStringFunc="@(s => s?.FullName ?? string.Empty)"
+                                     ValueChanged="OnStudentSelected"
+                                     Required="true"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.Person" />
+                </MudItem>
+
+                <!-- Due date -->
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_dueDate"
+                                   Label="Due Date"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   MinDate="DateTime.Today.AddDays(1)" />
+                </MudItem>
+
+                <!-- Currency -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_currency" Label="Currency"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("ZMW")">ZMW – Zambian Kwacha</MudSelectItem>
+                        <MudSelectItem Value="@("USD")">USD – US Dollar</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Line items -->
+                <MudItem xs="12">
+                    <div class="d-flex align-center justify-space-between mb-2">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold">Line Items</MudText>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="AddLineItem">Add Item</MudButton>
+                    </div>
+
+                    @for (int i = 0; i < _lineItems.Count; i++)
+                    {
+                        var idx = i;
+                        <MudPaper Elevation="0" Class="pa-3 mb-2 rounded-lg"
+                                  Style="border:1px solid var(--mud-palette-lines-default)">
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_lineItems[idx].Description"
+                                                  Label="Description"
+                                                  Variant="Variant.Outlined"
+                                                  Dense="true" Required="true" />
+                                </MudItem>
+                                <MudItem xs="6" sm="2">
+                                    <MudNumericField @bind-Value="_lineItems[idx].Quantity"
+                                                     Label="Qty"
+                                                     Variant="Variant.Outlined"
+                                                     Dense="true" Min="1" />
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudNumericField @bind-Value="_lineItems[idx].UnitPrice"
+                                                     Label="Unit Price"
+                                                     Variant="Variant.Outlined"
+                                                     Dense="true" Min="0" Format="N2" />
+                                </MudItem>
+                                <MudItem xs="12" sm="1" Class="d-flex align-center justify-center">
+                                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                                   Color="Color.Error" Size="Size.Small"
+                                                   OnClick="@(() => RemoveLineItem(idx))"
+                                                   Disabled="@(_lineItems.Count == 1)" />
+                                </MudItem>
+                            </MudGrid>
+                            <MudText Typo="Typo.caption" Class="mt-1" Align="Align.Right"
+                                     Color="Color.Secondary">
+                                Line Total: @_currency @((_lineItems[idx].Quantity * _lineItems[idx].UnitPrice).ToString("N2"))
+                            </MudText>
+                        </MudPaper>
+                    }
+                </MudItem>
+
+                <!-- Discount -->
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_discount" Label="Discount Amount"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.Start"
+                                     AdornmentText="@_currency"
+                                     Min="0" Format="N2" />
+                </MudItem>
+
+                <!-- Total preview -->
+                <MudItem xs="12" sm="6" Class="d-flex align-center">
+                    <div class="w-100">
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2">Sub-total:</MudText>
+                            <MudText Typo="Typo.body2">@_currency @SubTotal.ToString("N2")</MudText>
+                        </div>
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2">Discount:</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Success">
+                                -@_currency @_discount.ToString("N2")
+                            </MudText>
+                        </div>
+                        <MudDivider Class="my-1" />
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold">Total:</MudText>
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold" Color="Color.Primary">
+                                @_currency @(SubTotal - _discount).ToString("N2")
+                            </MudText>
+                        </div>
+                    </div>
+                </MudItem>
+
+                <!-- Notes -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_notes" Label="Notes (optional)"
+                                  Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Creating…" : "Create Invoice")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm _form  = null!;
+    private bool    _valid = false;
+    private bool    _saving = false;
+
+    private Guid?     _studentId;
+    private DateTime? _dueDate  = DateTime.Today.AddDays(30);
+    private string    _currency = "ZMW";
+    private decimal   _discount = 0;
+    private string?   _notes;
+
+    private class LineItemRow
+    {
+        public string  Description { get; set; } = string.Empty;
+        public int     Quantity    { get; set; } = 1;
+        public decimal UnitPrice   { get; set; } = 0;
+    }
+
+    private List<LineItemRow> _lineItems = new() { new() };
+
+    private decimal SubTotal => _lineItems.Sum(li => li.Quantity * li.UnitPrice);
+
+    private async Task<IEnumerable<TMS.Application.DTOs.Student.StudentSummaryDto>>
+        SearchStudentsAsync(string value, CancellationToken ct)
+    {
+        var result = await Api.GetAsync<TMS.Application.Common.PagedResult<
+            TMS.Application.DTOs.Student.StudentSummaryDto>>(
+            $"api/students?search={Uri.EscapeDataString(value ?? "")}&pageSize=10");
+
+        return result.Data?.Items ?? Enumerable.Empty<
+            TMS.Application.DTOs.Student.StudentSummaryDto>();
+    }
+
+    private void OnStudentSelected(TMS.Application.DTOs.Student.StudentSummaryDto? s)
+        => _studentId = s?.Id;
+
+    private void AddLineItem()    => _lineItems.Add(new());
+    private void RemoveLineItem(int i) => _lineItems.RemoveAt(i);
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid || _studentId is null || !_dueDate.HasValue) return;
+
+        _saving = true;
+
+        var request = new TMS.Application.DTOs.Payment.CreateInvoiceRequest
+        {
+            StudentId      = _studentId.Value,
+            DueDate        = _dueDate.Value,
+            DiscountAmount = _discount,
+            Currency       = _currency,
+            Notes          = _notes,
+            LineItems      = _lineItems.Select(li =>
+                new TMS.Application.DTOs.Payment.CreateInvoiceLineItemRequest
+                {
+                    Description = li.Description,
+                    Quantity    = li.Quantity,
+                    UnitPrice   = li.UnitPrice
+                }).ToList()
+        };
+
+        var result = await Api.PostAsync<TMS.Application.DTOs.Payment.InvoiceDto>(
+            "api/payments/invoices", request);
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(result.Data));
+        else
+            Snackbar.Add(result.Error ?? "Failed to create invoice.", Severity.Error);
+
+        _saving = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

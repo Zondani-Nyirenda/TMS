@@ -1,0 +1,469 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline — TMS</title>
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0B0D14;
+            --surface: #13151F;
+            --border: rgba(255,255,255,0.08);
+            --text-primary: #F9FAFB;
+            --text-secondary: #9CA3AF;
+            --primary: #6366F1;
+            --primary-soft: rgba(99,102,241,0.12);
+            --green: #10B981;
+            --green-soft: rgba(16,185,129,0.12);
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #F3F4F6;
+                --surface: #FFFFFF;
+                --border: #E5E7EB;
+                --text-primary: #111827;
+                --text-secondary: #6B7280;
+                --primary-soft: rgba(99,102,241,0.08);
+                --green-soft: rgba(16,185,129,0.08);
+            }
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
+            background-color: var(--bg);
+            color: var(--text-primary);
+        }
+
+        /* ── Layout ── */
+        .page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top bar ── */
+        .topbar {
+            height: 64px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .topbar-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
+            background: linear-gradient(135deg, #6366F1, #8B5CF6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .topbar-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.3px;
+        }
+
+        .topbar-badge {
+            margin-left: 8px;
+            background: rgba(239,68,68,0.12);
+            color: #EF4444;
+            border: 1px solid rgba(239,68,68,0.25);
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Main content ── */
+        .main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 16px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px 44px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* ── Animated icon ── */
+        .icon-wrap {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            background: var(--primary-soft);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 28px;
+            position: relative;
+            animation: pulse 2.6s ease-in-out infinite;
+        }
+
+            .icon-wrap .material-icons-round {
+                font-size: 36px;
+                color: var(--primary);
+            }
+
+            /* Ping ring */
+            .icon-wrap::after {
+                content: '';
+                position: absolute;
+                inset: -8px;
+                border-radius: 28px;
+                border: 2px solid rgba(99,102,241,0.2);
+                animation: ring 2.6s ease-in-out infinite;
+            }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.04);
+            }
+        }
+
+        @keyframes ring {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.3;
+                transform: scale(1.12);
+            }
+        }
+
+        /* ── Text ── */
+        .title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--text-primary);
+            margin: 0 0 10px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin: 0 0 32px;
+        }
+
+        /* ── Status row ── */
+        .status-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 32px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg);
+            text-align: left;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+            .status-dot.offline {
+                background: #EF4444;
+            }
+
+            .status-dot.cached {
+                background: #10B981;
+                animation: blink 1.4s ease-in-out infinite;
+            }
+
+        @keyframes blink {
+            0%, 100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .status-item-text {
+            flex: 1;
+        }
+
+        .status-item-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .status-item-sub {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 1px;
+        }
+
+        /* ── Buttons ── */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            height: 42px;
+            border-radius: 10px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366F1, #8B5CF6);
+            color: #fff;
+        }
+
+            .btn-primary:hover {
+                background: linear-gradient(135deg, #4F46E5, #7C3AED);
+                box-shadow: 0 4px 15px rgba(99,102,241,0.35);
+            }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+            .btn-outline:hover {
+                border-color: var(--primary);
+                color: var(--primary);
+                background: var(--primary-soft);
+            }
+
+        /* ── Footer ── */
+        .footer {
+            padding: 18px 24px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        /* ── Online banner ── */
+        .online-banner {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--green);
+            color: #fff;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            gap: 8px;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(16,185,129,0.4);
+            z-index: 100;
+            animation: slideUp 0.3s ease;
+        }
+
+            .online-banner.show {
+                display: flex;
+            }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 520px) {
+            .card {
+                padding: 36px 24px;
+                border-radius: 16px;
+            }
+
+            .btn-row {
+                flex-direction: column;
+            }
+
+            .title {
+                font-size: 19px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page">
+
+        <!-- Top bar -->
+        <header class="topbar">
+            <div class="topbar-logo">
+                <span class="material-icons-round" style="font-size:18px;">school</span>
+            </div>
+            <span class="topbar-name">TMS</span>
+            <span class="topbar-badge">OFFLINE</span>
+        </header>
+
+        <!-- Main -->
+        <main class="main">
+            <div class="card">
+
+                <!-- Icon -->
+                <div class="icon-wrap">
+                    <span class="material-icons-round">wifi_off</span>
+                </div>
+
+                <!-- Text -->
+                <h1 class="title">You're offline</h1>
+                <p class="subtitle">
+                    No internet connection detected. Some features may be unavailable,
+                    but your cached data is still accessible.
+                </p>
+
+                <!-- Status -->
+                <div class="status-row">
+                    <div class="status-item">
+                        <span class="status-dot offline"></span>
+                        <div class="status-item-text">
+                            <div class="status-item-label">Network connection</div>
+                            <div class="status-item-sub">Unable to reach TMS servers</div>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-dot cached"></span>
+                        <div class="status-item-text">
+                            <div class="status-item-label">Cached data available</div>
+                            <div class="status-item-sub">Attendance records will sync when back online</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="retryConnection()">
+                        <span class="material-icons-round" style="font-size:16px;">refresh</span>
+                        Try again
+                    </button>
+                    <button class="btn btn-outline" onclick="window.history.back()">
+                        <span class="material-icons-round" style="font-size:16px;">arrow_back</span>
+                        Go back
+                    </button>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            Tuition Management System &nbsp;·&nbsp; Offline Mode
+        </footer>
+
+    </div>
+
+    <!-- Back-online banner -->
+    <div class="online-banner" id="onlineBanner">
+        <span class="material-icons-round" style="font-size:16px;">wifi</span>
+        Connection restored — redirecting…
+    </div>
+
+    <script>
+    function retryConnection() {
+        const btn = document.querySelector('.btn-primary');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;animation:spin 0.8s linear infinite">refresh</span> Checking…';
+
+        // Add spin style dynamically
+        if (!document.getElementById('spin-style')) {
+            const s = document.createElement('style');
+            s.id = 'spin-style';
+            s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+            document.head.appendChild(s);
+        }
+
+        setTimeout(() => {
+            if (navigator.onLine) {
+                window.location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">refresh</span> Try again';
+            }
+        }, 1200);
+    }
+
+    // Auto-redirect when connection is restored
+    window.addEventListener('online', () => {
+        const banner = document.getElementById('onlineBanner');
+        banner.classList.add('show');
+        setTimeout(() => window.location.reload(), 1800);
+    });
+
+    window.addEventListener('offline', () => {
+        document.getElementById('onlineBanner').classList.remove('show');
+    });
+    </script>
+
+</body>
+</html>

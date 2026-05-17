@@ -1,0 +1,162 @@
+﻿@using MudBlazor
+@using TMS.Application.Common
+@using TMS.Application.DTOs.Course
+@using TMS.Application.DTOs.Tutor
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+@* ── ClassFormDialog ─────────────────────────────────────────────────────── *@
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.EventNote" Class="mr-2" />
+            @(Class is null ? "New Class" : "Edit Class")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_name" Label="Class Name" Variant="Variant.Outlined"
+                                  Required="true" Placeholder="e.g. Monday Morning Group" />
+                </MudItem>
+                @if (Class is null)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="_courseId" Label="Course" Variant="Variant.Outlined" Required="true">
+                            @foreach (var c in _courses)
+                            { <MudSelectItem Value="@c.Id">@c.Name (@c.Code)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                }
+                <MudItem xs="12" sm="@(Class is null ? 6 : 12)">
+                    <MudSelect @bind-Value="_tutorId" Label="Tutor" Variant="Variant.Outlined" Required="true">
+                        @foreach (var t in _tutors)
+                        { <MudSelectItem Value="@t.Id">@t.FullName</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_dayOfWeek" Label="Day of Week" Variant="Variant.Outlined">
+                        @foreach (var d in Enum.GetValues<DayOfWeekEnum>())
+                        { <MudSelectItem Value="@d">@d</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudTimePicker @bind-Time="_startTime" Label="Start" Variant="Variant.Outlined" AmPm="false" />
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudTimePicker @bind-Time="_endTime" Label="End" Variant="Variant.Outlined" AmPm="false" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_startDate" Label="Start Date" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_endDate" Label="End Date (optional)" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_room" Label="Room / Venue" Variant="Variant.Outlined" Placeholder="e.g. Room 12" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_maxCapacity" Label="Max Capacity" Variant="Variant.Outlined" Min="1" Max="500" />
+                </MudItem>
+                @if (Class is not null)
+                {
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_status" Label="Status" Variant="Variant.Outlined">
+                            @foreach (var s in Enum.GetValues<ClassStatus>())
+                            { <MudSelectItem Value="@s">@s</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ClassDto? Class { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid, _saving;
+
+    private string        _name = string.Empty, _room = string.Empty, _notes = string.Empty;
+    private Guid          _courseId, _tutorId;
+    private DayOfWeekEnum _dayOfWeek = DayOfWeekEnum.Monday;
+    private TimeSpan?     _startTime = new TimeSpan(8, 0, 0);
+    private TimeSpan?     _endTime   = new TimeSpan(10, 0, 0);
+    private DateTime?     _startDate = DateTime.Today;
+    private DateTime?     _endDate;
+    private int           _maxCapacity = 30;
+    private ClassStatus   _status = ClassStatus.Scheduled;
+
+    private List<CourseDto>      _courses = new();
+    private List<TutorSummaryDto> _tutors  = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cr = await Api.GetAsync<PagedResult<CourseDto>>("api/courses?pageSize=100");
+        var tr = await Api.GetAsync<PagedResult<TutorSummaryDto>>("api/tutors?pageSize=100");
+        _courses = cr.Data?.Items.ToList() ?? new();
+        _tutors  = tr.Data?.Items.ToList() ?? new();
+
+        if (Class is not null)
+        {
+            _name = Class.Name; _tutorId = Class.TutorId;
+            _dayOfWeek = Class.DayOfWeek;
+            _startTime = Class.StartTime.ToTimeSpan();
+            _endTime   = Class.EndTime.ToTimeSpan();
+            _startDate = Class.StartDate; _endDate = Class.EndDate;
+            _room = Class.Room ?? ""; _maxCapacity = Class.MaxCapacity;
+            _status = Class.Status; _notes = Class.Notes ?? "";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+        _saving = true;
+
+        ApiResult<ClassDto> result;
+        if (Class is null)
+        {
+            result = await Api.PostAsync<ClassDto>("api/classes", new CreateClassRequest
+            {
+                Name = _name, CourseId = _courseId, TutorId = _tutorId,
+                DayOfWeek = _dayOfWeek,
+                StartTime = TimeOnly.FromTimeSpan(_startTime ?? TimeSpan.Zero),
+                EndTime   = TimeOnly.FromTimeSpan(_endTime   ?? TimeSpan.Zero),
+                StartDate = _startDate ?? DateTime.Today, EndDate = _endDate,
+                Room = _room, MaxCapacity = _maxCapacity, Notes = _notes
+            });
+        }
+        else
+        {
+            result = await Api.PutAsync<ClassDto>($"api/classes/{Class.Id}", new UpdateClassRequest
+            {
+                Name = _name, TutorId = _tutorId, DayOfWeek = _dayOfWeek,
+                StartTime = TimeOnly.FromTimeSpan(_startTime ?? TimeSpan.Zero),
+                EndTime   = TimeOnly.FromTimeSpan(_endTime   ?? TimeSpan.Zero),
+                StartDate = _startDate ?? DateTime.Today, EndDate = _endDate,
+                Room = _room, MaxCapacity = _maxCapacity,
+                Status = _status, Notes = _notes
+            });
+        }
+
+        if (result.Success) MudDialog.Close(DialogResult.Ok(true));
+        else Snackbar.Add(result.Error ?? "Save failed.", Severity.Error);
+        _saving = false;
+    }
+}

@@ -1,0 +1,163 @@
+﻿@inject ApiClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Web.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Grading" Class="mr-2" />
+            Enter Results – @Exam?.Title
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Total Marks: @Exam?.TotalMarks  ·  Pass Mark: @Exam?.PassMark
+            </MudText>
+
+            <MudTable Items="@_rows" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>Student</MudTh>
+                    <MudTh Style="width:140px">Marks Obtained</MudTh>
+                    <MudTh>Remarks</MudTh>
+                    <MudTh>Grade</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <div class="d-flex align-center gap-2">
+                            <MudAvatar Color="Color.Primary" Size="Size.Small">
+                                @context.StudentName[..1]
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.body2">@context.StudentName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @context.StudentNumber
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField @bind-Value="context.Marks"
+                                         Variant="Variant.Outlined"
+                                         Dense="true" Min="0"
+                                         Max="@((double)(Exam?.TotalMarks ?? 100))"
+                                         Format="N1"
+                                         Style="width:120px" />
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField @bind-Value="context.Remarks"
+                                      Placeholder="Optional"
+                                      Variant="Variant.Text" Dense="true" />
+                    </MudTd>
+                    <MudTd>
+                        @{
+                            var pct = Exam?.TotalMarks > 0
+                                ? context.Marks / (double)(Exam!.TotalMarks) * 100 : 0;
+                        }
+                        <MudChip Size="Size.Small" T="string"
+                                 Color="@(pct >= (double)(Exam?.PassMark ?? 50) / (double)(Exam?.TotalMarks ?? 100) * 100 ? Color.Success : Color.Error)">
+                            @GetGradeLabel(pct)
+                        </MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : "Save Results")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public TMS.Application.DTOs.Exam.ExamDto? Exam { get; set; }
+
+    private class ResultRow
+    {
+        public Guid    StudentId     { get; set; }
+        public string  StudentName   { get; set; } = string.Empty;
+        public string  StudentNumber { get; set; } = string.Empty;
+        public double  Marks         { get; set; }
+        public string? Remarks       { get; set; }
+    }
+
+    private List<ResultRow> _rows    = new();
+    private bool            _loading = true;
+    private bool            _saving  = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Exam is null) return;
+
+        // Try load existing results first
+        var existing = await Api.GetAsync<List<TMS.Application.DTOs.Exam.ResultDto>>(
+            $"api/exams/{Exam.Id}/results");
+
+        // Load enrolled students
+        var students = await Api.GetAsync<List<TMS.Application.DTOs.Student.StudentSummaryDto>>(
+            $"api/classes/{Exam.ClassId}/students");
+
+        if (students.Success && students.Data is not null)
+        {
+            _rows = students.Data.Select(s =>
+            {
+                var ex = existing.Data?.FirstOrDefault(r => r.StudentId == s.Id);
+                return new ResultRow
+                {
+                    StudentId     = s.Id,
+                    StudentName   = s.FullName,
+                    StudentNumber = s.StudentNumber,
+                    Marks         = ex is not null ? (double)ex.MarksObtained : 0,
+                    Remarks       = ex?.Remarks
+                };
+            }).ToList();
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Exam is null) return;
+        _saving = true;
+
+        var request = new TMS.Application.DTOs.Exam.SubmitResultsRequest
+        {
+            ExamId  = Exam.Id,
+            Entries = _rows.Select(r =>
+                new TMS.Application.DTOs.Exam.StudentResultEntry
+                {
+                    StudentId      = r.StudentId,
+                    MarksObtained  = (decimal)r.Marks,
+                    Remarks        = r.Remarks
+                }).ToList()
+        };
+
+        var result = await Api.PostAsync<bool>($"api/exams/{Exam.Id}/results", request);
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            Snackbar.Add(result.Error ?? "Failed to save results.", Severity.Error);
+
+        _saving = false;
+    }
+
+    private static string GetGradeLabel(double pct) => pct switch
+    {
+        >= 95 => "A+", >= 90 => "A", >= 85 => "A-",
+        >= 80 => "B+", >= 75 => "B", >= 70 => "B-",
+        >= 65 => "C+", >= 60 => "C", >= 55 => "C-",
+        >= 50 => "D",  _     => "F"
+    };
+}

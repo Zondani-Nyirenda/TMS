@@ -1,0 +1,100 @@
+﻿@using MudBlazor
+@using TMS.Application.DTOs.Course
+@using TMS.Application.DTOs.Payment
+@using TMS.Web.Services
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PriceChange" Class="mr-2" />
+            New Fee Structure
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="_courseId" Label="Course" Variant="Variant.Outlined" Required="true">
+                        @foreach (var c in Courses)
+                        { <MudSelectItem Value="@c.Id">@c.Name (@c.Code)</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_name" Label="Fee Name" Variant="Variant.Outlined"
+                                  Required="true" Placeholder="e.g. Monthly Tuition Fee" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_description" Label="Description (optional)"
+                                  Variant="Variant.Outlined" Placeholder="e.g. Covers all sessions" />
+                </MudItem>
+                <MudItem xs="8">
+                    <MudNumericField @bind-Value="_amount" Label="Amount" Variant="Variant.Outlined"
+                                     Required="true" Min="0" Format="N2"
+                                     Adornment="Adornment.Start" AdornmentText="ZMW" />
+                </MudItem>
+                <MudItem xs="4">
+                    <MudSelect @bind-Value="_currency" Label="Currency" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("ZMW")">ZMW</MudSelectItem>
+                        <MudSelectItem Value="@("USD")">USD</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSwitch @bind-Value="_isRecurring" Label="Recurring fee" Color="Color.Primary" />
+                </MudItem>
+                @if (_isRecurring)
+                {
+                    <MudItem xs="12">
+                        <MudNumericField @bind-Value="_recurringDay"
+                                         Label="Due day of month (1–28)"
+                                         Variant="Variant.Outlined" Min="1" Max="28"
+                                         HelperText="e.g. 1 = first of each month" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public List<CourseDto> Courses { get; set; } = new();
+
+    private MudForm _form = null!;
+    private bool    _valid, _saving;
+    private Guid    _courseId;
+    private string  _name = string.Empty, _description = string.Empty, _currency = "ZMW";
+    private decimal _amount = 0;
+    private bool    _isRecurring = true;
+    private int     _recurringDay = 1;
+
+    private async Task SaveAsync()
+    {
+        await _form.Validate();
+        if (!_valid || _courseId == Guid.Empty) return;
+        _saving = true;
+
+        var r = await Api.PostAsync<FeeStructureDto>("api/payments/fee-structures",
+            new CreateFeeStructureRequest
+            {
+                CourseId           = _courseId,
+                Name               = _name,
+                Description        = _description,
+                Amount             = _amount,
+                Currency           = _currency,
+                IsRecurring        = _isRecurring,
+                RecurringDayOfMonth= _isRecurring ? _recurringDay : null
+            });
+
+        if (r.Success) MudDialog.Close(DialogResult.Ok(true));
+        else Snackbar.Add(r.Error ?? "Failed.", Severity.Error);
+        _saving = false;
+    }
+}

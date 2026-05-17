@@ -1,0 +1,454 @@
+﻿@page "/study-materials/view/{MaterialId:guid}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+
+<PageTitle>@(_material?.Title ?? "Loading…") – TMS</PageTitle>
+
+<!-- Breadcrumb -->
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4 px-0" />
+
+@if (_loading)
+{
+    <MudPaper Elevation="2" Class="pa-6 rounded-xl">
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
+        <MudSkeleton Class="mt-4" Width="60%" />
+        <MudSkeleton Class="mt-2" Width="40%" />
+    </MudPaper>
+}
+else if (_material is null)
+{
+    <MudAlert Severity="Severity.Error">Material not found.</MudAlert>
+}
+else
+{
+    <MudGrid>
+
+        <!-- ── Left: Viewer panel ── -->
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="2" Class="rounded-xl overflow-hidden">
+
+                <!-- Video player -->
+                @if (_material.Type == MaterialType.VideoLesson)
+                {
+                    <div Style="background:#000;position:relative;">
+                        <video id="tms-video-player"
+                               Style="width:100%;max-height:480px;display:block;"
+                               controls
+                               preload="metadata"
+                               @onpause="OnVideoPause"
+                               @onended="OnVideoEnded">
+                            <source src="@_material.FileUrl" type="video/mp4" />
+                            Your browser does not support HTML5 video.
+                        </video>
+                    </div>
+
+                    <!-- Progress bar -->
+                    @if (_material.VideoProgressPercentage.HasValue)
+                    {
+                        <div Class="pa-3 pb-0">
+                            <MudProgressLinear Value="@_material.VideoProgressPercentage.Value"
+                                               Color="Color.Primary"
+                                               Rounded="true"
+                                               Size="Size.Small" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                @_material.VideoProgressPercentage.Value.ToString("F0")% watched
+                                @if (_material.VideoCompleted)
+                                {
+                                    <MudChip Size="Size.Small" Color="Color.Success"
+                                             Class="ml-2" T="string">
+                                        Completed ✓
+                                    </MudChip>
+                                }
+                            </MudText>
+                        </div>
+                    }
+                }
+
+                <!-- PDF / Document viewer -->
+                else if (_material.FileType == MaterialFileType.Pdf)
+                {
+                <div Style="height:600px;">
+                    <iframe src="@_material.FileUrl"
+                            style="width:100%;height:100%;border:none;"
+                            title="@_material.Title">
+                    </iframe>
+                </div>
+                }
+
+                <!-- Image viewer -->
+                else if (_material.FileType == MaterialFileType.Image)
+                {
+                <div Class="d-flex justify-center pa-4"
+                     Style="background:#f8f9fa;">
+                    <img src="@_material.FileUrl"
+                         alt="@_material.Title"
+                         style="max-width:100%;max-height:600px;
+                    object-fit:contain;border-radius:8px;" />
+                </div>
+                }
+
+                <!-- Other file types — download prompt -->
+                else
+                {
+                <div Class="d-flex flex-column align-center pa-12">
+                    <MudText Style="font-size:4rem">
+                        @GetTypeEmoji(_material.Type)
+                    </MudText>
+                    <MudText Typo="Typo.h6" Class="mt-4">
+                        @_material.Title
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                        @_material.FileType file · @_material.FileSizeFormatted
+                    </MudText>
+                    @if (_material.AllowDownload)
+                    {
+                        <MudButton Class="mt-6"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   OnClick="DownloadAsync">
+                            Download File
+                        </MudButton>
+                    }
+                </div>
+                }
+
+                <!-- Title bar below viewer -->
+                <div Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="fw-bold">@_material.Title</MudText>
+                    @if (!string.IsNullOrWhiteSpace(_material.Description))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                            @_material.Description
+                        </MudText>
+                    }
+                </div>
+
+            </MudPaper>
+        </MudItem>
+
+        <!-- ── Right: Info panel ── -->
+        <MudItem xs="12" md="4">
+
+            <!-- Action buttons -->
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl mb-4">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Actions</MudText>
+
+                <div Class="d-flex flex-column gap-2">
+
+                    @if (_material.AllowDownload)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   OnClick="DownloadAsync">
+                            Download
+                        </MudButton>
+                    }
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="@(_material.IsBookmarked
+                                                                                          ? Color.Warning: Color.Default)"
+                               FullWidth="true"
+                               StartIcon="@(_material.IsBookmarked
+                                                                                          ? Icons.Material.Filled.Bookmark
+                                                                                      : Icons.Material.Outlined.BookmarkBorder)"
+                               OnClick="ToggleBookmarkAsync">
+                        @(_material.IsBookmarked ? "Remove Bookmark" : "Bookmark")
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Secondary"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Share"
+                               OnClick="ShareAsync">
+                        Share
+                    </MudButton>
+                </div>
+            </MudPaper>
+
+            <!-- Material details -->
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl mb-4">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Details</MudText>
+
+                <div Class="d-flex flex-column gap-2">
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Subject</MudText>
+                        <MudText Typo="Typo.body2">@_material.SubjectName</MudText>
+                    </div>
+
+                    <MudDivider />
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Category</MudText>
+                        <MudText Typo="Typo.body2">@_material.CategoryName</MudText>
+                    </div>
+
+                    <MudDivider />
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Type</MudText>
+                        <MudChip Size="Size.Small" Color="Color.Info" T="string">
+                            @_material.Type
+                        </MudChip>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_material.GradeLevel))
+                    {
+                        <MudDivider />
+                        <div Class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Grade</MudText>
+                            <MudText Typo="Typo.body2">@_material.GradeLevel</MudText>
+                        </div>
+                    }
+
+                    @if (_material.AcademicYear.HasValue)
+                    {
+                        <MudDivider />
+                        <div Class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Year</MudText>
+                            <MudText Typo="Typo.body2">@_material.AcademicYear</MudText>
+                        </div>
+                    }
+
+                    @if (_material.DurationFormatted is not null)
+                    {
+                        <MudDivider />
+                        <div Class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Duration</MudText>
+                            <MudText Typo="Typo.body2">@_material.DurationFormatted</MudText>
+                        </div>
+                    }
+
+                    <MudDivider />
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">File Size</MudText>
+                        <MudText Typo="Typo.body2">@_material.FileSizeFormatted</MudText>
+                    </div>
+
+                    <MudDivider />
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Views</MudText>
+                        <MudText Typo="Typo.body2">@_material.ViewCount</MudText>
+                    </div>
+
+                    <MudDivider />
+
+                    <div Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Uploaded</MudText>
+                        <MudText Typo="Typo.body2">
+                            @_material.CreatedAt.ToString("MMM dd, yyyy")
+                        </MudText>
+                    </div>
+
+                </div>
+            </MudPaper>
+
+            <!-- Tags -->
+            @if (!string.IsNullOrWhiteSpace(_material.Tags))
+            {
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2">Tags</MudText>
+                    <div Class="d-flex flex-wrap gap-1">
+                        @foreach (var tag in _material.Tags.Split(',',
+                                                    StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            <MudChip Size="Size.Small" Color="Color.Default" T="string">
+                                @tag.Trim()
+                            </MudChip>
+                        }
+                    </div>
+                </MudPaper>
+            }
+
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid MaterialId { get; set; }
+
+    private StudyMaterialDto? _material;
+    private bool _loading = true;
+
+    // Video progress tracking
+    private System.Timers.Timer? _progressTimer;
+    private bool _videoEnded;
+
+    private List<BreadcrumbItem> _breadcrumbs => new()
+    {
+        new("Study Materials", "/study-materials"),
+        new(_material?.SubjectName ?? "...", null, disabled: true),
+        new(_material?.CategoryName ?? "...", null, disabled: true),
+        new(_material?.Title ?? "...", null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        var result = await Api.GetAsync<StudyMaterialDto>(
+            $"api/study-materials/{MaterialId}");
+
+        if (result.Success && result.Data is not null)
+        {
+            _material = result.Data;
+
+            // Record view
+            await Api.PostAsync<object>(
+                $"api/study-materials/{MaterialId}/view", new { });
+
+            // Restore video position after render if video
+            if (_material.Type == MaterialType.VideoLesson &&
+                _material.VideoProgressSeconds.HasValue &&
+                _material.VideoProgressSeconds > 0)
+            {
+                // Set after render via JS
+                _restoreSeconds = _material.VideoProgressSeconds.Value;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private int? _restoreSeconds;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _restoreSeconds.HasValue && _restoreSeconds > 0)
+        {
+            await JS.InvokeVoidAsync(
+                "eval",
+                $"setTimeout(() => {{ var v = document.getElementById('tms-video-player'); if(v) v.currentTime = {_restoreSeconds}; }}, 500)");
+        }
+
+        // Start progress timer once video is loaded
+        if (firstRender && _material?.Type == MaterialType.VideoLesson)
+            StartProgressTimer();
+    }
+
+    private void StartProgressTimer()
+    {
+        _progressTimer = new System.Timers.Timer(10_000); // every 10 seconds
+        _progressTimer.Elapsed += async (_, _) => await SaveProgressAsync();
+        _progressTimer.AutoReset = true;
+        _progressTimer.Start();
+    }
+
+    private async Task SaveProgressAsync()
+    {
+        try
+        {
+            var seconds = await JS.InvokeAsync<double>(
+                "eval",
+                "document.getElementById('tms-video-player')?.currentTime ?? 0");
+
+            var duration = await JS.InvokeAsync<double>(
+                "eval",
+                "document.getElementById('tms-video-player')?.duration ?? 0");
+
+            if (seconds <= 0) return;
+
+            await Api.PostAsync<VideoProgressDto>("api/study-materials/progress", new
+            {
+                materialId = MaterialId,
+                progressSeconds = (int)seconds,
+                totalDurationSeconds = (int)duration,
+                isCompleted = _videoEnded
+            });
+        }
+        catch { /* swallow — background task */ }
+    }
+
+    private async Task OnVideoPause()
+        => await SaveProgressAsync();
+
+    private async Task OnVideoEnded()
+    {
+        _videoEnded = true;
+        await SaveProgressAsync();
+        if (_material is not null)
+        {
+            _material.VideoCompleted = true;
+            _material.VideoProgressPercentage = 100;
+        }
+        StateHasChanged();
+    }
+
+    private async Task DownloadAsync()
+    {
+        var result = await Api.PostAsync<object>(
+            $"api/study-materials/{MaterialId}/download", new { });
+
+        if (result.Success && _material is not null)
+        {
+            await JS.InvokeVoidAsync("open", _material.FileUrl, "_blank");
+            Snackbar.Add("Download started.", Severity.Success);
+        }
+        else
+            Snackbar.Add("Download failed.", Severity.Error);
+    }
+
+    private async Task ToggleBookmarkAsync()
+    {
+        if (_material is null) return;
+
+        if (_material.IsBookmarked)
+        {
+            var r = await Api.DeleteAsync(
+                $"api/study-materials/{MaterialId}/bookmark");
+            if (r.Success)
+            {
+                _material.IsBookmarked = false;
+                Snackbar.Add("Bookmark removed.", Severity.Info);
+            }
+        }
+        else
+        {
+            var r = await Api.PostAsync<BookmarkDto>(
+                $"api/study-materials/{MaterialId}/bookmark", new { });
+            if (r.Success)
+            {
+                _material.IsBookmarked = true;
+                Snackbar.Add("Bookmarked!", Severity.Success);
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task ShareAsync()
+    {
+        var url = Nav.ToAbsoluteUri(
+            $"/study-materials/view/{MaterialId}").ToString();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        Snackbar.Add("Link copied to clipboard.", Severity.Success);
+    }
+
+    private static string GetTypeEmoji(MaterialType type) => type switch
+    {
+        MaterialType.Book => "📚",
+        MaterialType.PastPaper => "📝",
+        MaterialType.VideoLesson => "🎥",
+        MaterialType.Notes => "📄",
+        MaterialType.Assignment => "✏️",
+        MaterialType.MarkingScheme => "✅",
+        _ => "📁"
+    };
+
+    public void Dispose()
+    {
+        _progressTimer?.Stop();
+        _progressTimer?.Dispose();
+    }
+}

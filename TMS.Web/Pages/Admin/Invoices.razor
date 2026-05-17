@@ -1,0 +1,253 @@
+﻿@page "/invoices"
+@* @attribute [Authorize(Roles = "Admin,Accountant")] *@
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Web.Component.Dialog
+@using TMS.Web.Services
+@inject NavigationManager Nav
+
+<PageTitle>Invoices – TMS</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Invoices</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage student invoices and billing</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        New Invoice
+    </MudButton>
+</div>
+
+<!-- Summary chips -->
+<MudGrid Class="mb-4">
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Primary">
+                ZMW @_summary.TotalInvoiced.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Invoiced</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Success">
+                ZMW @_summary.TotalCollected.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Collected</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Warning">
+                ZMW @_summary.TotalOutstanding.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Outstanding</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Elevation="1" Class="pa-3 rounded-xl text-center">
+            <MudText Typo="Typo.h6" Class="fw-bold" Color="Color.Error">
+                ZMW @_summary.TotalOverdue.ToString("N0")
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Overdue</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<!-- Search + filter bar -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <div class="d-flex align-center gap-3 flex-wrap">
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search by student name or invoice number…"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true"
+                      Class="flex-grow-1"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(() => _table.ReloadServerData())" />
+        <MudSelect T="string"
+                   Value="_statusFilter"
+                   Label="Status"
+                   Variant="Variant.Outlined"
+                   Style="min-width:140px"
+                   ValueChanged="@OnStatusFilterChanged">
+            <MudSelectItem Value="@("all")">All</MudSelectItem>
+            <MudSelectItem Value="@("Sent")">Sent</MudSelectItem>
+            <MudSelectItem Value="@("PartiallyPaid")">Partial</MudSelectItem>
+            <MudSelectItem Value="@("Paid")">Paid</MudSelectItem>
+            <MudSelectItem Value="@("Overdue")">Overdue</MudSelectItem>
+        </MudSelect>
+    </div>
+</MudPaper>
+
+<!-- Table -->
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable T="TMS.Application.DTOs.Payment.InvoiceDto"
+              ServerData="@LoadServerData"
+              @ref="_table"
+              Hover="true" Dense="false">
+        <HeaderContent>
+            <MudTh>Invoice #</MudTh>
+            <MudTh>Student</MudTh>
+            <MudTh>Issue Date</MudTh>
+            <MudTh>Due Date</MudTh>
+            <MudTh>Total</MudTh>
+            <MudTh>Paid</MudTh>
+            <MudTh>Balance</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="fw-bold">@context.InvoiceNumber</MudText>
+            </MudTd>
+            <MudTd>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small">
+                        @context.StudentName[..1]
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.body2" Class="fw-semibold">@context.StudentName</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.StudentNumber</MudText>
+                    </div>
+                </div>
+            </MudTd>
+            <MudTd>@context.IssueDate.ToString("dd MMM yyyy")</MudTd>
+            <MudTd>
+                <span class="@(context.DueDate < DateTime.Today && context.Status != TMS.Domain.Enums.InvoiceStatus.Paid ? "mud-error-text fw-bold" : "")">
+                    @context.DueDate.ToString("dd MMM yyyy")
+                </span>
+            </MudTd>
+            <MudTd>ZMW @context.TotalAmount.ToString("N2")</MudTd>
+            <MudTd>
+                <MudText Color="Color.Success">ZMW @context.PaidAmount.ToString("N2")</MudText>
+            </MudTd>
+            <MudTd>
+                @if (context.BalanceAmount > 0)
+                {
+                    <MudText Color="Color.Error" Class="fw-bold">
+                        ZMW @context.BalanceAmount.ToString("N2")
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Color="Color.Success">–</MudText>
+                }
+            </MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string" Color="@StatusColor(context.Status)" Label="true">
+                    @context.Status
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudTooltip Text="View Invoice">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small" Color="Color.Primary"
+                                   OnClick="@(() => Nav.NavigateTo($"/invoices/{context.Id}"))" />
+                </MudTooltip>
+                @if (context.BalanceAmount > 0)
+                {
+                    <MudTooltip Text="Record Payment">
+                        <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                       Size="Size.Small" Color="Color.Success"
+                                       OnClick="@(() => OpenPaymentDialog(context))" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.ReceiptLong"
+                         Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No invoices found.</MudText>
+            </div>
+        </NoRecordsContent>
+        <PagerContent><MudTablePager /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<TMS.Application.DTOs.Payment.InvoiceDto> _table = null!;
+    private string _search = string.Empty;
+    private string _statusFilter = "all";
+    private TMS.Application.DTOs.Payment.FinancialSummaryDto _summary = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAsync<TMS.Application.DTOs.Payment.FinancialSummaryDto>(
+            $"api/payments/summary?year={DateTime.Now.Year}");
+        if (result.Success && result.Data is not null)
+            _summary = result.Data;
+    }
+
+    private async Task<TableData<TMS.Application.DTOs.Payment.InvoiceDto>> LoadServerData(
+       TableState state, CancellationToken cancellationToken = default)
+    {
+        var url = $"api/payments/invoices?pageNumber={state.Page + 1}&pageSize={state.PageSize}" +
+                  $"&search={Uri.EscapeDataString(_search)}";
+
+        if (!string.IsNullOrEmpty(_statusFilter) && _statusFilter != "all")
+        {
+            url += $"&status={_statusFilter}";
+        }
+
+        var result = await Api.GetAsync<TMS.Application.Common.PagedResult<
+            TMS.Application.DTOs.Payment.InvoiceDto>>(url);
+
+        if (!result.Success || result.Data is null)
+            return new TableData<TMS.Application.DTOs.Payment.InvoiceDto>();
+
+        return new TableData<TMS.Application.DTOs.Payment.InvoiceDto>
+        {
+            Items = result.Data.Items,
+            TotalItems = result.Data.TotalCount
+        };
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog  = await DialogService.ShowAsync<CreateInvoiceDialog>(
+            "Create Invoice", options);
+        var result  = await dialog.Result;
+        if (!result.Canceled) await _table.ReloadServerData();
+    }
+
+    private async Task OpenPaymentDialog(TMS.Application.DTOs.Payment.InvoiceDto invoice)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Invoice"] = invoice
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog  = await DialogService.ShowAsync<RecordPaymentDialog>(
+            "Record Payment", parameters, options);
+        var result  = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await _table.ReloadServerData();
+            Snackbar.Add("Payment recorded successfully.", Severity.Success);
+        }
+    }
+    private async Task OnStatusFilterChanged(string v)
+    {
+        _statusFilter = v;
+        if (_table != null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+    private static Color StatusColor(TMS.Domain.Enums.InvoiceStatus status) => status switch
+    {
+        TMS.Domain.Enums.InvoiceStatus.Paid          => Color.Success,
+        TMS.Domain.Enums.InvoiceStatus.PartiallyPaid => Color.Warning,
+        TMS.Domain.Enums.InvoiceStatus.Overdue       => Color.Error,
+        TMS.Domain.Enums.InvoiceStatus.Sent          => Color.Info,
+        _                                            => Color.Default
+    };
+}

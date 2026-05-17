@@ -1,0 +1,148 @@
+﻿@page "/study-materials/bookmarks"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Domain.Enums
+@using TMS.Web.Services
+
+<PageTitle>My Bookmarks – TMS</PageTitle>
+
+<div Class="d-flex align-center justify-space-between mb-4">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">🔖 My Bookmarks</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Your saved study materials
+        </MudText>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" />
+                    <MudSkeleton Class="mt-2" />
+                    <MudSkeleton Width="60%" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (!_bookmarks.Any())
+{
+    <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+        <MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder"
+                 Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">
+            No bookmarks yet
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Browse materials and tap the bookmark icon to save them here.
+        </MudText>
+        <MudButton Class="mt-4"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(() => Nav.NavigateTo("/study-materials"))">
+            Browse Materials
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        @foreach (var b in _bookmarks)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+
+                    <div Class="d-flex align-center justify-space-between mb-2">
+                        <MudText Style="font-size:1.8rem">
+                            @GetTypeEmoji(b.MaterialType)
+                        </MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Bookmark"
+                                       Color="Color.Warning"
+                                       Size="Size.Small"
+                                       OnClick="@(() => RemoveBookmarkAsync(b))" />
+                    </div>
+
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                        @b.MaterialTitle
+                    </MudText>
+
+                    <div Class="d-flex gap-2 mt-1 flex-wrap">
+                        <MudChip Size="Size.Small" Color="Color.Primary" T="string">
+                            @b.SubjectName
+                        </MudChip>
+                        <MudChip Size="Size.Small" Color="Color.Default" T="string">
+                            @b.CategoryName
+                        </MudChip>
+                    </div>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                        Saved @b.BookmarkedAt.ToString("MMM dd, yyyy")
+                    </MudText>
+
+                    <MudButton Class="mt-3"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Visibility"
+                               OnClick="@(() => Nav.NavigateTo(
+                                                                                          $"/study-materials/view/{b.MaterialId}"))">
+                        Open
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<BookmarkDto> _bookmarks = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await Api.GetAsync<List<BookmarkDto>>(
+            "api/study-materials/bookmarks");
+        if (result.Success && result.Data is not null)
+            _bookmarks = result.Data;
+        else
+            Snackbar.Add(result.Error ?? "Failed to load bookmarks.", Severity.Error);
+        _loading = false;
+    }
+
+    private async Task RemoveBookmarkAsync(BookmarkDto bookmark)
+    {
+        var result = await Api.DeleteAsync(
+            $"api/study-materials/{bookmark.MaterialId}/bookmark");
+        if (result.Success)
+        {
+            _bookmarks.Remove(bookmark);
+            Snackbar.Add("Bookmark removed.", Severity.Info);
+            StateHasChanged();
+        }
+        else
+            Snackbar.Add(result.Error ?? "Failed.", Severity.Error);
+    }
+
+    private static string GetTypeEmoji(MaterialType type) => type switch
+    {
+        MaterialType.Book => "📚",
+        MaterialType.PastPaper => "📝",
+        MaterialType.VideoLesson => "🎥",
+        MaterialType.Notes => "📄",
+        MaterialType.Assignment => "✏️",
+        MaterialType.MarkingScheme => "✅",
+        _ => "📁"
+    };
+}

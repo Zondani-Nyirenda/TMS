@@ -1,0 +1,41 @@
+﻿@* Reusable stat card used on Dashboard *@
+@using MudBlazor
+
+<MudPaper Elevation="1" Class="pa-4 rounded-xl" Style="overflow:hidden;position:relative">
+    <div class="d-flex align-start justify-space-between">
+        <div>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">@Title</MudText>
+            <MudText Typo="Typo.h5" Class="fw-bold">@Value</MudText>
+            @if (!string.IsNullOrEmpty(Trend))
+            {
+                <div class="d-flex align-center mt-1 gap-1">
+                    <MudIcon Icon="@(TrendUp
+                                      ? Icons.Material.Filled.TrendingUp
+                                      : Icons.Material.Filled.TrendingDown)"
+                             Size="Size.Small"
+                             Color="@(TrendUp ? Color.Success : Color.Error)" />
+                    <MudText Typo="Typo.caption"
+                             Color="@(TrendUp ? Color.Success : Color.Error)">
+                        @Trend
+                    </MudText>
+                </div>
+            }
+        </div>
+        <MudAvatar Style="@($"background:var(--mud-palette-{ColorName}-lighten);color:var(--mud-palette-{ColorName})")"
+                   Size="Size.Large">
+            <MudIcon Icon="@Icon" />
+        </MudAvatar>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public string Title   { get; set; } = string.Empty;
+    [Parameter] public string Value   { get; set; } = string.Empty;
+    [Parameter] public string Icon    { get; set; } = string.Empty;
+    [Parameter] public Color  Color   { get; set; } = Color.Primary;
+    [Parameter] public string? Trend  { get; set; }
+    [Parameter] public bool TrendUp   { get; set; } = true;
+    [Parameter] public string CardColor { get; set; } = "primary";
+
+    private string ColorName => Color.ToString().ToLower();
+}

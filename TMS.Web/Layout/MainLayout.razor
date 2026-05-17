@@ -1,16 +1,304 @@
 ﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@implements IDisposable
+@using MudBlazor
+@using System.Security.Claims
+@using TMS.Domain.Enums
+@using TMS.Web.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@using TMS.Web.Shared
+@inject TmsAuthStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+<MudThemeProvider @ref="_themeProvider" Theme="_theme" @bind-IsDarkMode="_isDark" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<CascadingValue Value="_isDark" Name="IsDark">
+    <MudLayout>
+        <!-- ── App Bar ──────────────────────────────────────────────────── -->
+        <MudAppBar Elevation="0" Dense="false" Class="tms-appbar">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Edge="Edge.Start"
+                           Size="Size.Medium"
+                           Class="tms-icon-btn"
+                           OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+
+            <!-- Logo + Brand -->
+            <div class="d-flex align-center ml-2 gap-2">
+                <div style="width:36px;height:36px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <MudIcon Icon="@Icons.Material.Filled.School" Style="font-size:18px;color:#fff;" />
+                </div>
+                <div style="display:flex;flex-direction:column;line-height:1.15;">
+                    <span style="font-size:15px;font-weight:800;letter-spacing:-0.4px;color:var(--mud-palette-text-primary);">TMS</span>
+                    <span style="font-size:10px;font-weight:500;color:var(--mud-palette-text-secondary);letter-spacing:0.1px;">Tuition Management System</span>
+                </div>
+            </div>
+
+            <MudSpacer />
+
+            <!-- Search Bar -->
+            <div class="tms-search-bar">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Style="font-size:16px;color:var(--mud-palette-text-secondary);flex-shrink:0;" />
+                <span style="color:var(--mud-palette-text-secondary);font-size:13px;flex:1;">Search students, classes, invoices…</span>
+                <div class="tms-search-kbd">
+                    <span style="font-size:10px;color:var(--mud-palette-text-secondary);">⌘K</span>
+                </div>
+            </div>
+
+            <MudSpacer />
+
+            <div class="d-flex align-center gap-1">
+
+                <!-- Theme toggle -->
+                <MudTooltip Text="@(_isDark ? "Switch to Light" : "Switch to Dark")" Placement="Placement.Bottom">
+                    <MudIconButton Icon="@(_isDark? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                                   Size="Size.Medium"
+                                   Class="tms-icon-btn"
+                                   OnClick="ToggleTheme"
+                                   Title="Toggle theme" />
+                </MudTooltip>
+
+                <!-- Notifications -->
+                <MudTooltip Text="Notifications" Placement="Placement.Bottom">
+                    <MudBadge Content="3" Color="Color.Error" Overlap="true" Style="margin:0 2px;">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                                       Size="Size.Medium"
+                                       Class="tms-icon-btn" />
+                    </MudBadge>
+                </MudTooltip>
+
+                <!-- Divider -->
+                <div style="width:1px;height:26px;background:var(--mud-palette-divider);margin:0 8px;"></div>
+
+                <!-- User menu -->
+                <MudMenu Direction="Direction.Bottom" OffsetY="true" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <div class="tms-user-chip">
+                            <MudAvatar Style="width:25px;height:25px;background:linear-gradient(135deg,#6366F1,#8B5CF6);font-size:13px;font-weight:800;flex-shrink:0;">
+                                @_initials
+                            </MudAvatar>
+                            <div class="d-none d-sm-flex flex-column" style="line-height:1.25;">
+                                <span style="font-size:12px;font-weight:700;color:var(--mud-palette-text-primary);white-space:nowrap;">
+                                    @(_currentUser?.FullName ?? "Loading...")
+                                </span>
+                                <span style="font-size:10px;color:#6366F1;font-weight:600;">
+                                    @(_currentUser?.Role.ToString() ?? "")
+                                </span>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                                     Style="font-size:16px;color:var(--mud-palette-text-secondary);" />
+                        </div>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <!-- Menu header -->
+                        <div style="padding:12px 16px 10px;border-bottom:1px solid var(--mud-palette-divider);">
+                            <div style="font-size:13px;font-weight:700;color:var(--mud-palette-text-primary);">@(_currentUser?.FullName ?? "")</div>
+                            <div style="font-size:11px;color:var(--mud-palette-text-secondary);margin-top:1px;">@(_currentUser?.Email ?? "")</div>
+                            <div style="margin-top:6px;">
+                                <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;background:rgba(99,102,241,0.15);color:#818CF8;">
+                                    @(_currentUser?.Role.ToString() ?? "")
+                                </span>
+                            </div>
+                        </div>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Person" Style="font-size:13px;">My Profile</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Lock" Style="font-size:13px;">Change Password</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Settings" Style="font-size:13px;">Preferences</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout"
+                                     OnClick="LogoutAsync"
+                                     IconColor="Color.Error"
+                                     Style="font-size:13px;color:var(--mud-palette-error);">
+                            Sign Out
+                        </MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </div>
+        </MudAppBar>
+
+        <!-- ── Drawer ───────────────────────────────────────────────────── -->
+        <MudDrawer @bind-Open="_drawerOpen"
+                   ClipMode="DrawerClipMode.Always"
+                   Elevation="0"
+                   Variant="DrawerVariant.Responsive">
+            <div style="padding:16px 16px 6px;">
+                <MudText Typo="Typo.overline"
+                         Style="color:var(--mud-palette-text-secondary);font-size:9px;letter-spacing:1.8px;font-weight:700;">
+                    OVERVIEW
+                </MudText>
+            </div>
+            <NavMenu />
+            <MudSpacer />
+            <!-- Drawer footer user card -->
+            <div class="tms-drawer-footer">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <MudAvatar Style="width:34px;height:34px;background:linear-gradient(135deg,#6366F1,#8B5CF6);font-size:13px;font-weight:800;flex-shrink:0;">
+                        @_initials
+                    </MudAvatar>
+                    <div style="min-width:0;flex:1;">
+                        <div style="font-size:12px;font-weight:700;color:var(--mud-palette-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            @(_currentUser?.FullName ?? "Loading...")
+                        </div>
+                        <div style="font-size:10px;color:#6366F1;font-weight:600;margin-top:1px;">
+                            @(_currentUser?.Role.ToString() ?? "")
+                        </div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                   Size="Size.Small"
+                                   OnClick="LogoutAsync"
+                                   Style="color:var(--mud-palette-text-secondary);width:28px;height:28px;"
+                                   Title="Sign out" />
+                </div>
+            </div>
+        </MudDrawer>
+
+        <!-- ── Main Content ─────────────────────────────────────────────── -->
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4 pa-sm-6">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+          <InstallPwaDialog />
+    </MudLayout>
+</CascadingValue>
+
+@code {
+    private MudThemeProvider _themeProvider = null!;
+    private bool _drawerOpen = true;
+    private bool _isDark = true;
+    private string _initials = "U";
+    private TMS.Application.DTOs.Auth.UserDto? _currentUser;
+
+    private void ToggleTheme() => _isDark = !_isDark;
+
+    protected override void OnInitialized()
+    {
+        AuthProvider.AuthenticationStateChanged += OnAuthStateChangedAsync;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await AuthProvider.AuthReady;
+        await LoadCurrentUserAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnAuthStateChangedAsync(Task<AuthenticationState> _)
+    {
+        await LoadCurrentUserAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadCurrentUserAsync()
+    {
+        await AuthProvider.AuthReady;
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            var user = await AuthProvider.GetCurrentUserAsync();
+
+            if (user != null)
+            {
+                _currentUser = user;
+            }
+            else
+            {
+                _currentUser = new TMS.Application.DTOs.Auth.UserDto
+                {
+                    FullName = state.User.Identity.Name ?? "Authenticated User",
+                    Role = Enum.TryParse<UserRole>(
+                        state.User.FindFirst(ClaimTypes.Role)?.Value, out var r) ? r : UserRole.Admin
+                };
+            }
+            GenerateInitials();
+        }
+        else
+        {
+            _currentUser = null;
+            _initials = "U";
+        }
+    }
+
+    private void GenerateInitials()
+    {
+        if (string.IsNullOrWhiteSpace(_currentUser?.FullName))
+        {
+            _initials = "U";
+            return;
+        }
+        var parts = _currentUser.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _initials = parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+            : _currentUser.FullName[..1].ToUpper();
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthProvider.LogoutAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        AuthProvider.AuthenticationStateChanged -= OnAuthStateChangedAsync;
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#6366F1",
+            Secondary = "#8B5CF6",
+            Success = "#10B981",
+            Warning = "#F59E0B",
+            Error = "#EF4444",
+            Info = "#3B82F6",
+            AppbarBackground = "#0F1117",
+            Background = "#0B0D14",
+            Surface = "#13151F",
+            DrawerBackground = "#0F1117",
+            TextPrimary = "#F9FAFB",
+            TextSecondary = "#9CA3AF",
+            ActionDefault = "#9CA3AF",
+            Divider = "#1E2130",
+            TableLines = "#1E2130",
+            OverlayDark = "rgba(0,0,0,0.7)",
+        },
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#6366F1",
+            Secondary = "#8B5CF6",
+            Success = "#10B981",
+            Warning = "#F59E0B",
+            Error = "#EF4444",
+            Info = "#3B82F6",
+            AppbarBackground = "#FFFFFF",
+            Background = "#F3F4F6",
+            Surface = "#FFFFFF",
+            DrawerBackground = "#FFFFFF",
+            TextPrimary = "#111827",
+            TextSecondary = "#6B7280",
+            ActionDefault = "#6B7280",
+            Divider = "#E5E7EB",
+            TableLines = "#E5E7EB",
+            DrawerText = "#111827",
+            DrawerIcon = "#374151",
+        },
+        Typography = new Typography
+        {
+            Default = new Default { FontFamily = new[] { "DM Sans", "Inter", "sans-serif" } },
+            H4 = new H4 { FontWeight = 700, LetterSpacing = "-0.5px" },
+            H5 = new H5 { FontWeight = 700, LetterSpacing = "-0.3px" },
+            H6 = new H6 { FontWeight = 700 },
+            Subtitle1 = new Subtitle1 { FontWeight = 600 },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DrawerWidthLeft = "220px",
+            AppbarHeight = "64px",
+        }
+    };
+}

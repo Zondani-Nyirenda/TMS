@@ -1,0 +1,175 @@
+﻿@page "/my-results"
+@attribute [Authorize(Roles = "Student,Parent")]
+@inject ApiClient Api
+@inject TmsAuthStateProvider AuthProvider
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Domain.Enums
+@using TMS.Web.Auth
+@using TMS.Web.Services
+<PageTitle>My Results – TMS</PageTitle>
+
+<MudText Typo="Typo.h5" Class="fw-bold mb-1">My Results</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Your exam scores and academic performance
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_results.Any())
+{
+    <!-- Performance summary -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl d-flex flex-column align-center">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Overall Average</MudText>
+                <MudText Typo="Typo.h3" Class="fw-bold"
+                         Color="@GradeColor(_overallAvg)">
+                    @_overallAvg.ToString("F1")%
+                </MudText>
+                <MudChip Color="@GradeColor(_overallAvg)" T="string" Class="mt-2">@GetGradeLabel(_overallAvg)</MudChip>
+                <MudProgressLinear Value="@_overallAvg" Color="@GradeColor(_overallAvg)"
+                                   Rounded="true" Size="Size.Large" Class="mt-3 w-100" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl">
+                <MudChart ChartType="ChartType.Donut"
+                          InputData="@_passFailData"
+                          InputLabels="@(new[]{"Passed","Failed"})"
+                          Width="100%" Height="160px" />
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="mt-2">
+                    @_passCount passed · @(_results.Count - _passCount) failed
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-xl">
+                <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Grade Breakdown</MudText>
+                @foreach (var kvp in _gradeCounts.OrderByDescending(k => k.Value))
+                {
+                    <div class="d-flex justify-space-between align-center mb-1">
+                        <MudText Typo="Typo.body2">@kvp.Key</MudText>
+                        <div class="d-flex align-center gap-2">
+                            <MudProgressLinear Value="@(kvp.Value * 100.0 / _results.Count)"
+                                               Color="Color.Primary" Style="width:80px"
+                                               Rounded="true" Size="Size.Small" />
+                            <MudText Typo="Typo.caption" Style="min-width:20px">@kvp.Value</MudText>
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Score trend chart -->
+    <MudPaper Elevation="1" Class="pa-4 rounded-xl mb-4">
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Performance Trend</MudText>
+        <MudChart ChartType="ChartType.Line"
+                  ChartSeries="@_trendSeries"
+                  XAxisLabels="@_trendLabels"
+                  Width="100%" Height="200px"
+                  ChartOptions="@(new ChartOptions { YAxisTicks = 5, LineStrokeWidth = 2 })" />
+    </MudPaper>
+
+    <!-- Results table -->
+    <MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+        <MudTable Items="@_results" Hover="true" Dense="false">
+            <HeaderContent>
+                <MudTh>Exam</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Date</MudTh>
+                <MudTh>Marks</MudTh>
+                <MudTh>%</MudTh>
+                <MudTh>Grade</MudTh>
+                <MudTh>Result</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="fw-semibold">@context.ExamTitle</MudText>
+                </MudTd>
+                <MudTd>
+                    <MudChip Size="Size.Small" Color="Color.Default" T="string">@context.ExamType</MudChip>
+                </MudTd>
+                <MudTd>@context.ExamDate.ToString("dd MMM yyyy")</MudTd>
+                <MudTd>@context.MarksObtained / @context.TotalMarks</MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="fw-bold"
+                             Color="@(context.Percentage >= 50 ? Color.Success : Color.Error)">
+                        @context.Percentage.ToString("F1")%
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudChip Size="Size.Small" Color="@GradeChipColor(context.Grade)" T="string" Label="true">
+                        @context.Grade
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    @if (context.IsPassed)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" />
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+else
+{
+    <div class="d-flex flex-column align-center pa-12">
+        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents"
+                 Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">No results yet</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Your exam results will appear here once published by your tutor
+        </MudText>
+    </div>
+}
+
+@code {
+    private record ResultRow(string ExamTitle, string ExamType, DateTime ExamDate,
+        decimal MarksObtained, decimal TotalMarks, decimal Percentage,
+        GradeLevel Grade, bool IsPassed);
+
+    private bool   _loading    = true;
+    private double _overallAvg = 0;
+    private int    _passCount  = 0;
+
+    private List<ResultRow>             _results    = new();
+    private double[]                    _passFailData = Array.Empty<double>();
+    private Dictionary<string, int>     _gradeCounts  = new();
+    private List<ChartSeries>           _trendSeries  = new();
+    private string[]                    _trendLabels  = Array.Empty<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Placeholder — wire to /api/exams/performance?studentId=me when available
+        _loading = false;
+    }
+
+    private static Color GradeColor(double pct) =>
+        pct >= 80 ? Color.Success : pct >= 60 ? Color.Primary : pct >= 50 ? Color.Warning : Color.Error;
+
+    private static Color GradeChipColor(GradeLevel g) => g switch
+    {
+        GradeLevel.APlus or GradeLevel.A or GradeLevel.AMinus => Color.Success,
+        GradeLevel.BPlus or GradeLevel.B or GradeLevel.BMinus => Color.Primary,
+        GradeLevel.CPlus or GradeLevel.C or GradeLevel.CMinus => Color.Info,
+        GradeLevel.D => Color.Warning,
+        _            => Color.Error
+    };
+
+    private static string GetGradeLabel(double pct) => pct switch
+    {
+        >= 95 => "A+", >= 90 => "A", >= 85 => "A-",
+        >= 80 => "B+", >= 75 => "B", >= 70 => "B-",
+        >= 65 => "C+", >= 60 => "C", >= 55 => "C-",
+        >= 50 => "D",  _     => "F"
+    };
+}

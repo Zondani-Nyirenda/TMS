@@ -1,0 +1,229 @@
+﻿@page "/students"
+@* @attribute [Authorize(Roles = "Admin,Accountant,Tutor")] *@
+@inject ApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject TMS.Web.Auth.TmsAuthStateProvider AuthProvider
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using TMS.Web.Services
+@inject NavigationManager Nav
+
+<PageTitle>Students – TMS</PageTitle>
+
+<!-- Header -->
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">Students</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Manage student enrolments and profiles
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.PersonAdd"
+               OnClick="@(() => Nav.NavigateTo("/students/new"))">
+        Add Student
+    </MudButton>
+</div>
+
+<!-- Search bar -->
+<MudPaper Elevation="1" Class="pa-3 mb-4 rounded-xl">
+    <div class="d-flex align-center gap-3 flex-wrap">
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search by name, email or student number…"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      OnClearButtonClick="@(() => { _search = string.Empty; _ = _table.ReloadServerData(); })"
+                      Class="flex-grow-1"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(() => _ = _table.ReloadServerData())" />
+        <MudSelect @bind-Value="_activeFilter"
+                   @bind-Value:after="@(() => _ = _table.ReloadServerData())"
+                   Label="Status" Variant="Variant.Outlined"
+                   Style="min-width:130px">
+            <MudSelectItem Value="@("all")">All</MudSelectItem>
+            <MudSelectItem Value="@("active")">Active</MudSelectItem>
+            <MudSelectItem Value="@("inactive")">Inactive</MudSelectItem>
+        </MudSelect>
+    </div>
+</MudPaper>
+
+<!-- Table -->
+<MudPaper Elevation="1" Class="rounded-xl overflow-hidden">
+    <MudTable Items="@_students"
+              Loading="@_loading"
+              Hover="true" Striped="false" Dense="false"
+              RowsPerPage="20"
+              ServerData="@LoadServerData"
+              @ref="_table"
+              T="TMS.Application.DTOs.Student.StudentSummaryDto">
+
+        <ToolBarContent>
+            <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                @_totalCount student@(_totalCount != 1 ? "s" : "")
+            </MudText>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>Student</MudTh>
+            <MudTh>Student #</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Phone</MudTh>
+            <MudTh>Classes</MudTh>
+            <MudTh>Balance</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh Style="width:120px">Actions</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Small">
+                        @context.FullName[..1]
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2" Class="fw-semibold">@context.FullName</MudText>
+                </div>
+            </MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" Color="Color.Default" T="string">
+                    @context.StudentNumber
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.Email</MudTd>
+            <MudTd>@context.PhoneNumber</MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" Color="Color.Info" T="string">
+                    @context.ActiveClassCount
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                @if (context.OutstandingBalance > 0)
+                {
+                    <MudText Color="Color.Error" Typo="Typo.body2" Class="fw-bold">
+                        ZMW @context.OutstandingBalance.ToString("N0")
+                    </MudText>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                             Color="Color.Success" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                <MudChip Size="Size.Small" T="string"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Active" : "Inactive")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudTooltip Text="View">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small" Color="Color.Primary"
+                                   OnClick="@(() => Nav.NavigateTo($"/students/{context.Id}"))" />
+                </MudTooltip>
+                <AuthorizeView Roles="Admin,Accountant">
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Size="Size.Small" Color="Color.Info"
+                                       OnClick="@(() => Nav.NavigateTo($"/students/{context.Id}/edit"))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteAsync(context.Id, context.FullName))" />
+                    </MudTooltip>
+                </AuthorizeView>
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff"
+                         Style="font-size:3rem" Color="Color.Secondary" />
+                <MudText Class="mt-2" Color="Color.Secondary">No students found.</MudText>
+            </div>
+        </NoRecordsContent>
+
+        <LoadingContent>
+            <MudText>Loading students…</MudText>
+        </LoadingContent>
+
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<TMS.Application.DTOs.Student.StudentSummaryDto> _table = null!;
+    private List<TMS.Application.DTOs.Student.StudentSummaryDto> _students = new();
+    private bool _loading = true;
+    private bool _authReady = false;
+    private string _search = string.Empty;
+    private string _activeFilter = "all";
+    private int _totalCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthProvider.AuthReady;
+        _authReady = true;
+    }
+
+    private async Task<TableData<TMS.Application.DTOs.Student.StudentSummaryDto>> LoadServerData(
+        TableState state, CancellationToken cancellationToken)
+    {
+        if (!_authReady)
+            return new TableData<TMS.Application.DTOs.Student.StudentSummaryDto>
+            { Items = new List<TMS.Application.DTOs.Student.StudentSummaryDto>(), TotalItems = 0 };
+
+        _loading = true;
+        StateHasChanged();
+
+        var url = $"api/students?pageNumber={state.Page + 1}&pageSize={state.PageSize}" +
+                  $"&search={Uri.EscapeDataString(_search)}" +
+                  $"&active={_activeFilter}";
+
+        var result = await Api.GetAsync<TMS.Application.Common.PagedResult<TMS.Application.DTOs.Student.StudentSummaryDto>>(url);
+
+        if (result.Success && result.Data is not null)
+        {
+            _students = result.Data.Items.ToList();
+            _totalCount = result.Data.TotalCount;
+        }
+        else
+        {
+            _students = new();
+            _totalCount = 0;
+        }
+
+        _loading = false;
+        return new TableData<TMS.Application.DTOs.Student.StudentSummaryDto>
+        {
+            Items = _students,
+            TotalItems = _totalCount
+        };
+    }
+
+    private async Task DeleteAsync(Guid id, string name)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete {name}? This cannot be undone.",
+            yesText: "Delete", noText: "Cancel");
+
+        if (confirmed != true) return;
+
+        var result = await Api.DeleteAsync($"api/students/{id}");
+        if (result.Success)
+        {
+            Snackbar.Add($"{name} deleted.", Severity.Success);
+            await _table.ReloadServerData();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Delete failed.", Severity.Error);
+        }
+    }
+}

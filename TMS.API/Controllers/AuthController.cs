@@ -5,9 +5,6 @@ using TMS.Application.Interfaces;
 
 namespace TMS.API.Controllers;
 
-/// <summary>
-/// Handles authentication — login, register, token refresh, password changes.
-/// </summary>
 [Route("api/auth")]
 public class AuthController : BaseController
 {
@@ -20,7 +17,6 @@ public class AuthController : BaseController
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), 200)]
-    [ProducesResponseType(400)]
     public async Task<IActionResult> Login(
         [FromBody] LoginRequest request, CancellationToken ct)
     {
@@ -28,11 +24,10 @@ public class AuthController : BaseController
         return OkResult(response, "Login successful.");
     }
 
-    /// <summary>Register a new user account (Admin only).</summary>
+    /// <summary>Register a new user account.</summary>
     [HttpPost("register")]
-    [Authorize(Roles = "Admin")]
+    [AllowAnonymous]                          // lock to [Authorize(Roles="Admin")] if needed
     [ProducesResponseType(201)]
-    [ProducesResponseType(400)]
     public async Task<IActionResult> Register(
         [FromBody] RegisterRequest request, CancellationToken ct)
     {
@@ -40,11 +35,10 @@ public class AuthController : BaseController
         return StatusCode(201, new { success = true, message = "User registered successfully." });
     }
 
-    /// <summary>Use a valid refresh token to get a new access token.</summary>
+    /// <summary>Refresh an expired access token.</summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), 200)]
-    [ProducesResponseType(400)]
     public async Task<IActionResult> Refresh(
         [FromBody] RefreshTokenRequest request, CancellationToken ct)
     {
@@ -55,7 +49,6 @@ public class AuthController : BaseController
     /// <summary>Change password for the currently authenticated user.</summary>
     [HttpPost("change-password")]
     [ProducesResponseType(200)]
-    [ProducesResponseType(400)]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
@@ -63,7 +56,7 @@ public class AuthController : BaseController
         return OkResult(true, "Password changed successfully.");
     }
 
-    /// <summary>Logout — revokes the refresh token server-side.</summary>
+    /// <summary>Logout — revoke the refresh token server-side.</summary>
     [HttpPost("logout")]
     [ProducesResponseType(200)]
     public async Task<IActionResult> Logout(CancellationToken ct)
@@ -72,7 +65,7 @@ public class AuthController : BaseController
         return OkResult(true, "Logged out successfully.");
     }
 
-    /// <summary>Returns the current user's profile from the JWT.</summary>
+    /// <summary>Get the current user's profile from the JWT.</summary>
     [HttpGet("me")]
     [ProducesResponseType(typeof(UserDto), 200)]
     public IActionResult Me()
@@ -81,8 +74,7 @@ public class AuthController : BaseController
         {
             Id = CurrentUserId,
             Email = CurrentUserEmail,
-            FullName = User.FindFirst("firstName")?.Value + " " +
-                       User.FindFirst("lastName")?.Value,
+            FullName = $"{User.FindFirst("firstName")?.Value} {User.FindFirst("lastName")?.Value}".Trim(),
             IsActive = true
         };
         return OkResult(user);

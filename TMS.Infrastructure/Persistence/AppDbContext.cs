@@ -27,6 +27,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Exam> Exams => Set<Exam>();
     public DbSet<Result> Results => Set<Result>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    // ── Study Materials Module ─────────────────────────────────────────────────
+    public DbSet<Subject> Subjects => Set<Subject>();
+    public DbSet<MaterialCategory> MaterialCategories => Set<MaterialCategory>();
+    public DbSet<StudyMaterial> StudyMaterials => Set<StudyMaterial>();
+    public DbSet<SubjectClassMapping> SubjectClassMappings => Set<SubjectClassMapping>();
+    public DbSet<MaterialDownload> MaterialDownloads => Set<MaterialDownload>();
+    public DbSet<MaterialBookmark> MaterialBookmarks => Set<MaterialBookmark>();
+    public DbSet<VideoProgress> VideoProgresses => Set<VideoProgress>();
+
+    // ── Course Content ─────────────────────────────────────────────────────────
+    public DbSet<ContentModule> ContentModules => Set<ContentModule>();
+    public DbSet<ContentItem> ContentItems => Set<ContentItem>();
+    public DbSet<ContentItemAccess> ContentItemAccesses => Set<ContentItemAccess>();
+    public DbSet<StudentContentProgress> StudentContentProgress => Set<StudentContentProgress>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -59,6 +73,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<IdentityUserLogin<string>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<string>>().ToTable("UserTokens");
+
+        // ── Study Materials Module ─────────────────────────────────────────────────
+        builder.Entity<Subject>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<MaterialCategory>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<StudyMaterial>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SubjectClassMapping>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<MaterialDownload>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<MaterialBookmark>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<VideoProgress>().HasQueryFilter(e => !e.IsDeleted);
+
+        // ── Content ──────────────────────────────────────────────────────────
+        builder.Entity<ContentModule>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ContentItem>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ContentItemAccess>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<StudentContentProgress>().HasQueryFilter(e => !e.IsDeleted);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -1,0 +1,189 @@
+﻿@page "/study-materials"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@using MudBlazor
+@using TMS.Application.DTOs.StudyMaterial
+@using TMS.Web.Services
+
+<PageTitle>Study Materials – TMS</PageTitle>
+
+<!-- Header -->
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="fw-bold">📚 Study Materials</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Browse learning resources by subject
+        </MudText>
+    </div>
+
+    <AuthorizeView Roles="Admin">
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateSubjectDialog">
+            New Subject
+        </MudButton>
+    </AuthorizeView>
+</div>
+
+<!-- Loading skeleton -->
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 6; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" />
+                    <MudSkeleton Class="mt-3" />
+                    <MudSkeleton Width="60%" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (!_subjects.Any())
+{
+    <!-- Empty state -->
+    <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+        <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                 Style="font-size:4rem" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4" Color="Color.Secondary">
+            No subjects yet
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+            Admins can create subjects to organise study materials.
+        </MudText>
+    </MudPaper>
+}
+else
+{
+    <!-- Subject cards grid -->
+    <MudGrid>
+        @foreach (var subject in _subjects)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2"
+                          Class="pa-4 rounded-xl cursor-pointer subject-card"
+                          Style="@($"border-left: 5px solid {subject.ColorHex ?? "#6366F1"}; transition: box-shadow .2s;")"
+                          @onclick="@(() => Nav.NavigateTo($"/study-materials/{subject.Id}"))">
+
+                    <div class="d-flex align-center justify-space-between mb-2">
+                        <div class="d-flex align-center gap-2">
+                            <MudText Style="font-size:2rem">
+                                @(subject.IconEmoji ?? "📁")
+                            </MudText>
+                            <MudText Typo="Typo.h6" Class="fw-bold">
+                                @subject.Name
+                            </MudText>
+                        </div>
+
+                        <AuthorizeView Roles="Admin">
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                     Size="Size.Small" Dense="true"
+                                     @onclick:stopPropagation="true">
+                                <MudMenuItem OnClick="@(() => OpenEditSubjectDialog(subject))">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Edit"
+                                                 Size="Size.Small" />
+                                        Edit
+                                    </div>
+                                </MudMenuItem>
+                                <MudMenuItem OnClick="@(() => DeleteSubjectAsync(subject.Id, subject.Name))">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Delete"
+                                                 Size="Size.Small"
+                                                 Color="Color.Error" />
+                                        <MudText Color="Color.Error">Delete</MudText>
+                                    </div>
+                                </MudMenuItem>
+                            </MudMenu>
+                        </AuthorizeView>
+                    </div>
+
+                    <div class="d-flex gap-3 mt-3">
+                        <MudChip Size="Size.Small" Color="Color.Primary" T="string">
+                            @subject.CategoryCount categor@(subject.CategoryCount == 1 ? "y" : "ies")
+                        </MudChip>
+                        <MudChip Size="Size.Small" Color="Color.Secondary" T="string">
+                            @subject.MaterialCount material@(subject.MaterialCount == 1 ? "" : "s")
+                        </MudChip>
+                    </div>
+
+                    @if (!subject.IsActive)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning"
+                                 Class="mt-2" T="string">
+                            Inactive
+                        </MudChip>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<SubjectSummaryDto> _subjects = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await Api.GetAsync<List<SubjectSummaryDto>>("api/subjects?activeOnly=false");
+        if (result.Success && result.Data is not null)
+            _subjects = result.Data;
+        else
+            Snackbar.Add(result.Error ?? "Failed to load subjects.", Severity.Error);
+        _loading = false;
+    }
+
+    private async Task OpenCreateSubjectDialog()
+    {
+        var dialog = await DialogService.ShowAsync<SubjectFormDialog>("New Subject");
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    private async Task OpenEditSubjectDialog(SubjectSummaryDto subject)
+    {
+        var parameters = new DialogParameters
+        {
+            ["SubjectId"] = subject.Id,
+            ["ExistingName"] = subject.Name,
+            ["ExistingDescription"] = (string?)null,
+            ["ExistingIconEmoji"] = subject.IconEmoji,
+            ["ExistingColorHex"] = subject.ColorHex,
+            ["ExistingSortOrder"] = subject.SortOrder,
+            ["ExistingIsActive"] = subject.IsActive
+        };
+        var dialog = await DialogService.ShowAsync<SubjectFormDialog>("Edit Subject", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    private async Task DeleteSubjectAsync(Guid id, string name)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Delete subject '{name}'? All categories and materials will also be deleted.",
+            yesText: "Delete", noText: "Cancel");
+
+        if (confirmed != true) return;
+
+        var result = await Api.DeleteAsync($"api/subjects/{id}");
+        if (result.Success)
+        {
+            Snackbar.Add($"'{name}' deleted.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+            Snackbar.Add(result.Error ?? "Delete failed.", Severity.Error);
+    }
+}
